@@ -270,7 +270,7 @@ def natural_sort_key_joint(value, orig_index):
     return (1, orig_index)
 
 
-def clean_df(df):
+def clean_df(df, drop_filled=True):
     df_clean = df.copy()
     df_clean["_orig_index"] = df_clean.index
 
@@ -281,7 +281,10 @@ def clean_df(df):
     field_norm = df_clean["CustomFieldName"].apply(normalize_text)
     mask_ass = (op_norm == "ass") & (field_norm.isin(target_fields))
 
-    df_clean = df_clean[~(mask_filled | mask_ass)].copy()
+    if drop_filled:
+        df_clean = df_clean[~(mask_filled | mask_ass)].copy()
+    else:
+        df_clean = df_clean[~mask_ass].copy()
     return df_clean
 
 
@@ -641,6 +644,7 @@ def init_session_state():
         "loaded_source_id": None,
         "job_changed": False,
         "mode": None,
+        "hide_filled_rows": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -809,7 +813,7 @@ def main():
     if mode == MODE_CONTINUE:
         df_view = df_full
     else:
-        df_view = clean_df(df_full)
+        df_view = clean_df(df_full, drop_filled=st.session_state["hide_filled_rows"])
     st.session_state["df_view"] = df_view
 
     jobs = unique_in_order(df_view["Job"].tolist())
@@ -833,6 +837,12 @@ def main():
         on_change=on_job_change,
     )
     st.session_state["selected_job"] = selected_job
+    if mode != MODE_CONTINUE:
+        st.checkbox(
+            "Masquer les lignes deja remplies",
+            key="hide_filled_rows",
+            help="Decoche pour eviter que les lignes disparaissent pendant la saisie.",
+        )
 
     updates = build_ui(df_view, selected_job)
     st.session_state["updates"] = updates
@@ -841,7 +851,9 @@ def main():
     if mode == MODE_CONTINUE:
         st.session_state["df_view"] = df_updated
     else:
-        st.session_state["df_view"] = clean_df(df_updated)
+        st.session_state["df_view"] = clean_df(
+            df_updated, drop_filled=st.session_state["hide_filled_rows"]
+        )
 
     if st.session_state.get("job_changed"):
         auto_path = st.session_state.get("auto_save_path")
@@ -871,7 +883,7 @@ def main():
             st.error(f"Erreur de sauvegarde: {exc}")
 
     export_data = export_bytes(
-        st.session_state["df_view"],
+        clean_df(st.session_state["df_full"], drop_filled=True),
         st.session_state["sheet_name"],
         st.session_state["original_columns"],
     )
