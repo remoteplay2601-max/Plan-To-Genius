@@ -337,11 +337,23 @@ def normalize_save_path(path, default_name):
     return path
 
 
+def build_extracteur_path(path):
+    if not path:
+        return ""
+    base, ext = os.path.splitext(path)
+    if base.endswith("_EXTRACTEUR"):
+        return f"{base}{ext or '.xlsx'}"
+    if not ext:
+        ext = ".xlsx"
+    return f"{base}_EXTRACTEUR{ext}"
+
+
 def init_session_state():
     defaults = {
         "df_clean": None,
         "sheet_name": None,
         "save_path": None,
+        "auto_save_path": None,
         "selected_job": None,
         "updates": {},
         "original_columns": None,
@@ -374,6 +386,7 @@ def main():
         st.session_state["selected_job"] = None
         st.session_state["updates"] = {}
         st.session_state["save_path"] = None
+        st.session_state["auto_save_path"] = None
 
     file_or_path = None
     source_id = None
@@ -426,6 +439,7 @@ def main():
             )
             save_path = normalize_save_path(path_input, default_name)
             st.session_state["save_path"] = save_path
+            st.session_state["auto_save_path"] = build_extracteur_path(save_path)
             st.caption(f"Dossier par defaut: {os.getcwd()}")
 
     else:
@@ -460,6 +474,7 @@ def main():
             )
             save_path = normalize_save_path(path_input, default_name)
             st.session_state["save_path"] = save_path
+            st.session_state["auto_save_path"] = build_extracteur_path(save_path)
             st.caption(
                 "Impossible de recuperer le chemin original depuis l'upload."
             )
@@ -477,15 +492,22 @@ def main():
             if missing:
                 st.error(f"Colonnes manquantes: {', '.join(missing)}")
                 return
-            df_clean = clean_df(df_raw)
+            if mode == "Continuer (reprendre la derniere fois)":
+                df_clean = passthrough_df(df_raw)
+            else:
+                df_clean = clean_df(df_raw)
             st.session_state["df_clean"] = df_clean
             st.session_state["sheet_name"] = sheet_name
             st.session_state["original_columns"] = list(df_raw.columns)
             st.session_state["loaded_source_id"] = source_id
             st.session_state["selected_job"] = None
             st.session_state["updates"] = {}
+            st.session_state["auto_save_path"] = build_extracteur_path(
+                st.session_state["save_path"]
+            )
 
         st.success(f"Fichier de travail: {st.session_state['save_path']}")
+        st.info(f"Sauvegarde auto: {st.session_state['auto_save_path']}")
 
     df_clean = st.session_state.get("df_clean")
     if df_clean is None:
@@ -519,16 +541,17 @@ def main():
     st.session_state["df_clean"] = df_updated
 
     if st.session_state.get("job_changed"):
-        if st.session_state.get("save_path"):
+        auto_path = st.session_state.get("auto_save_path")
+        if auto_path:
             save_to_disk(
                 st.session_state["df_clean"],
-                st.session_state["save_path"],
+                auto_path,
                 st.session_state["sheet_name"],
                 st.session_state["original_columns"],
             )
             st.success("Sauvegarde automatique effectuee.")
         else:
-            st.warning("Chemin de sauvegarde manquant pour l'auto-save.")
+            st.warning("Chemin de sauvegarde auto manquant.")
         st.session_state["job_changed"] = False
 
     col_save, col_export, col_genius = st.columns(3)
