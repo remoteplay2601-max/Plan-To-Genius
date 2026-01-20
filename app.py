@@ -1,7 +1,7 @@
 import os
 import re
 import unicodedata
-from datetime import date, time
+from datetime import date, datetime, time
 from io import BytesIO
 
 import pandas as pd
@@ -23,6 +23,7 @@ REQUIRED_COLS = [
 
 DATE_FIELD = "DateTermine"
 DEFAULT_TIME = time(15, 0)
+AUTO_FILL_FIELDS = {"materiel", "employe1", "sch", "type"}
 
 
 def has_value(val):
@@ -44,6 +45,11 @@ def normalize_text(value):
     text = str(value).strip().lower()
     text = unicodedata.normalize("NFKD", text)
     return "".join(ch for ch in text if not unicodedata.combining(ch))
+
+
+def normalize_key(value):
+    text = normalize_text(value)
+    return re.sub(r"[\s_]+", "", text)
 
 
 def natural_sort_key_joint(value, orig_index):
@@ -225,19 +231,13 @@ def build_ui(df_clean, selected_job):
                 .map(str.strip)
             )
             existing_value = existing_value[existing_value != ""].head(1)
-            default_date = date.today()
-            default_time = DEFAULT_TIME
+            now = datetime.now().replace(second=0, microsecond=0)
+            default_date = now.date()
+            default_time = now.time()
             if not existing_value.empty:
                 parsed = parse_genius_datetime(existing_value.iloc[0])
                 if parsed:
                     default_date, default_time = parsed
-            apply_key = f"apply_dt_{selected_job}_{op_code}"
-            default_apply = not existing_value.empty
-            apply_value = st.checkbox(
-                f"Renseigner DateTermine pour {op_code}",
-                value=default_apply,
-                key=apply_key,
-            )
             date_key = f"dt_date_{selected_job}_{op_code}"
             time_key = f"dt_time_{selected_job}_{op_code}"
             date_value = st.date_input(
@@ -250,11 +250,10 @@ def build_ui(df_clean, selected_job):
                 value=default_time,
                 key=time_key,
             )
-            if apply_value:
-                formatted = format_datetime(date_value, time_value)
-                for idx in df_date.index:
-                    if df_clean.at[idx, "CustomFieldValue"] != formatted:
-                        updates[idx] = formatted
+            formatted = format_datetime(date_value, time_value)
+            for idx in df_date.index:
+                if df_clean.at[idx, "CustomFieldValue"] != formatted:
+                    updates[idx] = formatted
 
         other_fields = df_op[~date_mask]
         field_names = unique_in_order(other_fields["CustomFieldName"].tolist())
@@ -262,6 +261,9 @@ def build_ui(df_clean, selected_job):
             st.markdown(f"**{field_name}**")
             df_field = other_fields[other_fields["CustomFieldName"] == field_name]
             df_field = sorted_group(df_field)
+            auto_fill = normalize_key(field_name) in AUTO_FILL_FIELDS
+            first_value = None
+            first_row_changed = False
             for idx, row in df_field.iterrows():
                 joint_label = row["Operation Description1"]
                 if joint_label is None or (
@@ -282,8 +284,19 @@ def build_ui(df_clean, selected_job):
                     key=key,
                     label_visibility="collapsed",
                 )
+                if first_value is None:
+                    first_value = new_value.strip()
+                    first_row_changed = new_value != str(current_value)
                 if new_value != str(current_value):
                     updates[idx] = new_value
+                if (
+                    auto_fill
+                    and first_row_changed
+                    and first_value
+                    and not has_value(current_value)
+                    and not has_value(new_value)
+                ):
+                    updates[idx] = first_value
         st.divider()
     return updates
 
@@ -377,7 +390,7 @@ def main():
 
     mode = st.radio(
         "Mode de travail",
-        ["Nouveau document", "Continuer (reprendre la derniere fois)"],
+        ["Nouveau document", "Continuer (reprendre un ficher non terminée)"],
     )
     if st.session_state["mode"] != mode:
         st.session_state["mode"] = mode
