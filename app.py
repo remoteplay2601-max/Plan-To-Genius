@@ -1,3 +1,4 @@
+import html
 import os
 import re
 import unicodedata
@@ -59,6 +60,120 @@ def get_now_quebec():
         return datetime.now(ZoneInfo("America/Toronto"))
     except Exception:
         return datetime.now()
+
+
+def inject_styles():
+    st.markdown(
+        """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+        :root {
+            --bg1: #0b0f14;
+            --bg2: #0f1b2b;
+            --card: rgba(19, 24, 34, 0.9);
+            --accent: #f4b942;
+            --accent-2: #4fd1c5;
+            --text: #f5f7fb;
+            --muted: #9aa4b5;
+            --border: rgba(255, 255, 255, 0.08);
+        }
+        html, body, [class*="css"] {
+            font-family: 'Space Grotesk', sans-serif;
+            color: var(--text);
+        }
+        .stApp {
+            background:
+                radial-gradient(1200px 600px at 10% -10%, rgba(244, 185, 66, 0.12), transparent 60%),
+                radial-gradient(1000px 500px at 90% -20%, rgba(79, 209, 197, 0.14), transparent 60%),
+                linear-gradient(180deg, var(--bg1), var(--bg2));
+        }
+        .block-container {
+            max-width: 1280px;
+            padding-top: 1.2rem;
+            padding-bottom: 4rem;
+        }
+        .hero {
+            background: linear-gradient(135deg, rgba(244, 185, 66, 0.12), rgba(79, 209, 197, 0.08));
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 1rem 1.2rem;
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+            margin-bottom: 1.2rem;
+        }
+        .hero-title {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            margin: 0;
+        }
+        .hero-sub {
+            color: var(--muted);
+            margin-top: 0.3rem;
+        }
+        .op-header {
+            margin-top: 1.4rem;
+            margin-bottom: 0.4rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .field-header {
+            display: inline-block;
+            margin: 0.4rem 0 0.6rem;
+            padding: 0.35rem 0.7rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 999px;
+            font-weight: 600;
+            color: #f0f3ff;
+        }
+        .joint-tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            background: rgba(79, 209, 197, 0.12);
+            color: #d7fef7;
+            padding: 0.2rem 0.55rem;
+            border-radius: 10px;
+            border: 1px solid rgba(79, 209, 197, 0.35);
+            display: inline-block;
+        }
+        div[data-testid="stHorizontalBlock"] {
+            gap: 0.8rem;
+            align-items: center;
+        }
+        .stTextInput input,
+        .stDateInput input,
+        .stTimeInput input {
+            background: rgba(12, 16, 24, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            height: 2.4rem;
+        }
+        .stTextInput input:focus,
+        .stDateInput input:focus,
+        .stTimeInput input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(244, 185, 66, 0.2);
+        }
+        .stButton > button {
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text);
+            padding: 0.5rem 1.1rem;
+            font-weight: 600;
+        }
+        .stButton > button:hover {
+            border-color: var(--accent-2);
+            box-shadow: 0 0 0 2px rgba(79, 209, 197, 0.2);
+        }
+        .stAlert {
+            border-radius: 12px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def natural_sort_key_joint(value, orig_index):
@@ -222,10 +337,20 @@ def build_ui(df_clean, selected_job):
     if df_job.empty:
         st.info("Aucune ligne pour ce Job apres epuration.")
         return updates
+    total_rows = len(df_job)
+    filled_rows = df_job["CustomFieldValue"].apply(has_value).sum()
+    if total_rows:
+        st.progress(
+            filled_rows / total_rows,
+            text=f"Progression: {filled_rows}/{total_rows} valeurs remplies",
+        )
 
     op_codes = unique_in_order(df_job["OperationCode"].tolist())
     for op_code in op_codes:
-        st.subheader(f"OperationCode: {op_code}")
+        st.markdown(
+            f"<div class='op-header'>Operation {html.escape(str(op_code))}</div>",
+            unsafe_allow_html=True,
+        )
         df_op = df_job[df_job["OperationCode"] == op_code].copy()
 
         date_mask = df_op["CustomFieldName"].apply(
@@ -267,7 +392,10 @@ def build_ui(df_clean, selected_job):
         other_fields = df_op[~date_mask]
         field_names = unique_in_order(other_fields["CustomFieldName"].tolist())
         for field_name in field_names:
-            st.markdown(f"**{field_name}**")
+            st.markdown(
+                f"<div class='field-header'>{html.escape(str(field_name))}</div>",
+                unsafe_allow_html=True,
+            )
             df_field = other_fields[other_fields["CustomFieldName"] == field_name]
             df_field = sorted_group(df_field)
             auto_fill = normalize_key(field_name) in AUTO_FILL_FIELDS
@@ -285,8 +413,11 @@ def build_ui(df_clean, selected_job):
                 first_current_raw
             )
             first_key = f"val_{first_idx}"
-            col_left, col_right = st.columns([1, 3])
-            col_left.write(str(first_joint))
+            col_left, col_right = st.columns([1, 4])
+            col_left.markdown(
+                f"<span class='joint-tag'>{html.escape(str(first_joint))}</span>",
+                unsafe_allow_html=True,
+            )
             first_new = col_right.text_input(
                 f"{field_name} {first_idx}",
                 value=first_display,
@@ -319,8 +450,11 @@ def build_ui(df_clean, selected_job):
                     if not has_value(existing_state):
                         st.session_state[key] = seed_value
                         updates[idx] = seed_value
-                col_left, col_right = st.columns([1, 3])
-                col_left.write(str(joint_label))
+                col_left, col_right = st.columns([1, 4])
+                col_left.markdown(
+                    f"<span class='joint-tag'>{html.escape(str(joint_label))}</span>",
+                    unsafe_allow_html=True,
+                )
                 new_value = col_right.text_input(
                     f"{field_name} {idx}",
                     value=display_value,
@@ -415,11 +549,16 @@ def init_session_state():
 
 def main():
     st.set_page_config(page_title="Qualifab Genius Input", layout="wide")
+    inject_styles()
     init_session_state()
-
-    st.title("Qualifab - Saisie CustomFieldValue")
-    st.write(
-        "Choisissez un mode, chargez un fichier Excel, puis renseignez les valeurs."
+    st.markdown(
+        """
+        <div class="hero">
+            <div class="hero-title">Qualifab - Saisie CustomFieldValue</div>
+            <div class="hero-sub">Choisissez un mode, chargez un fichier Excel, puis renseignez les valeurs.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
     mode = st.radio(
