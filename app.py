@@ -139,7 +139,9 @@ def apply_updates(df_clean, updates):
 def save_to_disk(df_clean, path, sheet_name, original_columns):
     if not path:
         raise ValueError("Missing save path.")
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
     export_df = df_clean.drop(columns=["_orig_index"], errors="ignore")
     if original_columns:
         export_df = export_df[original_columns]
@@ -198,7 +200,13 @@ def build_ui(df_clean, selected_job):
         )
         df_date = df_op[date_mask]
         if not df_date.empty:
-            existing_value = df_date["CustomFieldValue"].dropna().astype(str).head(1)
+            existing_value = (
+                df_date["CustomFieldValue"]
+                .dropna()
+                .astype(str)
+                .map(str.strip)
+            )
+            existing_value = existing_value[existing_value != ""].head(1)
             default_date = date.today()
             default_time = DEFAULT_TIME
             if not existing_value.empty:
@@ -208,19 +216,19 @@ def build_ui(df_clean, selected_job):
             apply_key = f"apply_dt_{selected_job}_{op_code}"
             default_apply = not existing_value.empty
             apply_value = st.checkbox(
-                "Renseigner DateTermine pour cette operation",
+                f"Renseigner DateTermine pour {op_code}",
                 value=default_apply,
                 key=apply_key,
             )
             date_key = f"dt_date_{selected_job}_{op_code}"
             time_key = f"dt_time_{selected_job}_{op_code}"
             date_value = st.date_input(
-                "DateTermine - date",
+                f"DateTermine - date ({op_code})",
                 value=default_date,
                 key=date_key,
             )
             time_value = st.time_input(
-                "DateTermine - heure",
+                f"DateTermine - heure ({op_code})",
                 value=default_time,
                 key=time_key,
             )
@@ -347,6 +355,7 @@ def main():
         st.session_state["loaded_source_id"] = None
         st.session_state["selected_job"] = None
         st.session_state["updates"] = {}
+        st.session_state["save_path"] = None
 
     file_or_path = None
     source_id = None
