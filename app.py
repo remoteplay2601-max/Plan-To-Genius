@@ -25,6 +25,8 @@ REQUIRED_COLS = [
 DATE_FIELD = "DateTermine"
 DEFAULT_TIME = time(15, 0)
 AUTO_FILL_FIELDS = {"materiel", "employe1", "sch", "type"}
+MODE_NEW = "Nouveau document"
+MODE_CONTINUE = "Continuer (reprendre un fichier non termine)"
 
 
 def has_value(val):
@@ -650,7 +652,7 @@ def main():
 
     mode = st.radio(
         "Mode de travail",
-        ["Nouveau document", "Continuer (reprendre un ficher non terminée)"],
+        [MODE_NEW, MODE_CONTINUE],
     )
     if st.session_state["mode"] != mode:
         st.session_state["mode"] = mode
@@ -666,7 +668,7 @@ def main():
     source_id = None
     save_path = st.session_state.get("save_path")
 
-    if mode == "Nouveau document":
+    if mode == MODE_NEW:
         st.subheader("1) Charger un fichier brut")
         if st.button("Ouvrir un fichier local (dialogue Windows)"):
             path = try_tk_open_file()
@@ -785,7 +787,7 @@ def main():
     if df_full is None:
         return
 
-    if mode == "Continuer (reprendre la derniere fois)":
+    if mode == MODE_CONTINUE:
         df_view = df_full
     else:
         df_view = clean_df(df_full)
@@ -817,7 +819,7 @@ def main():
     st.session_state["updates"] = updates
     df_updated = apply_updates(df_full, updates)
     st.session_state["df_full"] = df_updated
-    if mode == "Continuer (reprendre la derniere fois)":
+    if mode == MODE_CONTINUE:
         st.session_state["df_view"] = df_updated
     else:
         st.session_state["df_view"] = clean_df(df_updated)
