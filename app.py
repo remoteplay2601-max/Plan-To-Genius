@@ -66,29 +66,29 @@ def inject_styles():
     st.markdown(
         """
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap');
         :root {
-            --bg1: #0b0f14;
-            --bg2: #0f1b2b;
-            --card: rgba(19, 24, 34, 0.9);
-            --accent: #f4b942;
-            --accent-2: #4fd1c5;
+            --bg1: #0c111a;
+            --bg2: #121b2a;
+            --card: rgba(18, 24, 34, 0.92);
+            --accent: #f6c453;
+            --accent-2: #58d3c7;
             --text: #f5f7fb;
             --muted: #9aa4b5;
             --border: rgba(255, 255, 255, 0.08);
         }
         html, body, [class*="css"] {
-            font-family: 'Space Grotesk', sans-serif;
+            font-family: 'Urbanist', sans-serif;
             color: var(--text);
         }
         .stApp {
             background:
-                radial-gradient(1200px 600px at 10% -10%, rgba(244, 185, 66, 0.12), transparent 60%),
-                radial-gradient(1000px 500px at 90% -20%, rgba(79, 209, 197, 0.14), transparent 60%),
+                radial-gradient(1000px 600px at 8% -10%, rgba(246, 196, 83, 0.12), transparent 60%),
+                radial-gradient(900px 500px at 92% -20%, rgba(88, 211, 199, 0.12), transparent 60%),
                 linear-gradient(180deg, var(--bg1), var(--bg2));
         }
         .block-container {
-            max-width: 1280px;
+            max-width: 1180px;
             padding-top: 1.2rem;
             padding-bottom: 4rem;
         }
@@ -101,7 +101,7 @@ def inject_styles():
             margin-bottom: 1.2rem;
         }
         .hero-title {
-            font-size: 2rem;
+            font-size: 1.9rem;
             font-weight: 700;
             letter-spacing: 0.4px;
             margin: 0;
@@ -128,8 +128,8 @@ def inject_styles():
             color: #f0f3ff;
         }
         .joint-tag {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.9rem;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.85rem;
             background: rgba(79, 209, 197, 0.12);
             color: #d7fef7;
             padding: 0.2rem 0.55rem;
@@ -137,21 +137,42 @@ def inject_styles():
             border: 1px solid rgba(79, 209, 197, 0.35);
             display: inline-block;
         }
+        .mini-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--muted);
+            margin-bottom: 0.25rem;
+        }
         div[data-testid="stHorizontalBlock"] {
             gap: 0.8rem;
             align-items: center;
         }
         .stTextInput input,
         .stDateInput input,
-        .stTimeInput input {
-            background: rgba(12, 16, 24, 0.85);
+        .stTimeInput input,
+        .stSelectbox select {
+            background: rgba(12, 16, 24, 0.9);
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 12px;
             height: 2.4rem;
+            color: var(--text);
+        }
+        .stTimeInput div[data-baseweb="select"] > div,
+        .stSelectbox div[data-baseweb="select"] > div {
+            background: rgba(12, 16, 24, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            color: var(--text);
+        }
+        .stTimeInput div[data-baseweb="select"] svg,
+        .stSelectbox div[data-baseweb="select"] svg {
+            color: var(--muted);
         }
         .stTextInput input:focus,
         .stDateInput input:focus,
-        .stTimeInput input:focus {
+        .stTimeInput input:focus,
+        .stSelectbox select:focus {
             border-color: var(--accent);
             box-shadow: 0 0 0 2px rgba(244, 185, 66, 0.2);
         }
@@ -374,15 +395,20 @@ def build_ui(df_clean, selected_job):
                     default_date, default_time = parsed
             date_key = f"dt_date_{selected_job}_{op_code}"
             time_key = f"dt_time_{selected_job}_{op_code}"
-            date_value = st.date_input(
+            date_col, time_col = st.columns([2, 1])
+            date_col.markdown("<div class='mini-label'>Date</div>", unsafe_allow_html=True)
+            date_value = date_col.date_input(
                 f"DateTermine - date ({op_code})",
                 value=default_date,
                 key=date_key,
+                label_visibility="collapsed",
             )
-            time_value = st.time_input(
+            time_col.markdown("<div class='mini-label'>Heure</div>", unsafe_allow_html=True)
+            time_value = time_col.time_input(
                 f"DateTermine - heure ({op_code})",
                 value=default_time,
                 key=time_key,
+                label_visibility="collapsed",
             )
             formatted = format_datetime(date_value, time_value)
             for idx in df_date.index:
@@ -413,7 +439,7 @@ def build_ui(df_clean, selected_job):
                 first_current_raw
             )
             first_key = f"val_{first_idx}"
-            col_left, col_right = st.columns([1, 4])
+            col_left, col_right = st.columns([0.9, 5.1])
             col_left.markdown(
                 f"<span class='joint-tag'>{html.escape(str(first_joint))}</span>",
                 unsafe_allow_html=True,
@@ -423,6 +449,7 @@ def build_ui(df_clean, selected_job):
                 value=first_display,
                 key=first_key,
                 label_visibility="collapsed",
+                placeholder="Saisir une valeur",
             )
             if first_new != first_display:
                 updates[first_idx] = first_new
@@ -450,7 +477,7 @@ def build_ui(df_clean, selected_job):
                     if not has_value(existing_state):
                         st.session_state[key] = seed_value
                         updates[idx] = seed_value
-                col_left, col_right = st.columns([1, 4])
+                col_left, col_right = st.columns([0.9, 5.1])
                 col_left.markdown(
                     f"<span class='joint-tag'>{html.escape(str(joint_label))}</span>",
                     unsafe_allow_html=True,
@@ -460,6 +487,7 @@ def build_ui(df_clean, selected_job):
                     value=display_value,
                     key=key,
                     label_visibility="collapsed",
+                    placeholder="Saisir une valeur",
                 )
                 if new_value != display_value:
                     updates[idx] = new_value
