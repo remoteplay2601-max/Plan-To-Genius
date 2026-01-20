@@ -271,7 +271,6 @@ def build_ui(df_clean, selected_job):
             df_field = other_fields[other_fields["CustomFieldName"] == field_name]
             df_field = sorted_group(df_field)
             auto_fill = normalize_key(field_name) in AUTO_FILL_FIELDS
-            seed_value = None
             row_entries = []
             for idx, row in df_field.iterrows():
                 joint_label = row["Operation Description1"]
@@ -295,18 +294,25 @@ def build_ui(df_clean, selected_job):
                 )
                 if new_value != str(current_value):
                     updates[idx] = new_value
-                row_entries.append((idx, current_value, new_value))
-                if (
-                    auto_fill
-                    and seed_value is None
-                    and new_value.strip()
-                    and new_value != str(current_value)
-                ):
-                    seed_value = new_value.strip()
-            if auto_fill and seed_value:
-                for idx, current_value, new_value in row_entries:
-                    if not has_value(current_value) and not has_value(new_value):
-                        updates[idx] = seed_value
+                row_entries.append(
+                    {
+                        "idx": idx,
+                        "current": str(current_value),
+                        "new": new_value,
+                        "key": key,
+                    }
+                )
+            if auto_fill and row_entries:
+                first_entry = row_entries[0]
+                first_new = first_entry["new"].strip()
+                first_changed = first_new != first_entry["current"]
+                if first_new and first_changed:
+                    for entry in row_entries[1:]:
+                        if not has_value(entry["current"]) and not has_value(
+                            entry["new"]
+                        ):
+                            updates[entry["idx"]] = first_new
+                            st.session_state[entry["key"]] = first_new
         st.divider()
     return updates
 
