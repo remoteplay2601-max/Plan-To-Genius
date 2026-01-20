@@ -52,6 +52,15 @@ def normalize_key(value):
     return re.sub(r"[\s_]+", "", text)
 
 
+def get_now_quebec():
+    try:
+        from zoneinfo import ZoneInfo
+
+        return datetime.now(ZoneInfo("America/Toronto"))
+    except Exception:
+        return datetime.now()
+
+
 def natural_sort_key_joint(value, orig_index):
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return (1, orig_index)
@@ -231,7 +240,7 @@ def build_ui(df_clean, selected_job):
                 .map(str.strip)
             )
             existing_value = existing_value[existing_value != ""].head(1)
-            now = datetime.now().replace(second=0, microsecond=0)
+            now = get_now_quebec().replace(second=0, microsecond=0)
             default_date = now.date()
             default_time = now.time()
             if not existing_value.empty:
@@ -262,8 +271,8 @@ def build_ui(df_clean, selected_job):
             df_field = other_fields[other_fields["CustomFieldName"] == field_name]
             df_field = sorted_group(df_field)
             auto_fill = normalize_key(field_name) in AUTO_FILL_FIELDS
-            first_value = None
-            first_row_changed = False
+            seed_value = None
+            row_entries = []
             for idx, row in df_field.iterrows():
                 joint_label = row["Operation Description1"]
                 if joint_label is None or (
@@ -284,19 +293,20 @@ def build_ui(df_clean, selected_job):
                     key=key,
                     label_visibility="collapsed",
                 )
-                if first_value is None:
-                    first_value = new_value.strip()
-                    first_row_changed = new_value != str(current_value)
                 if new_value != str(current_value):
                     updates[idx] = new_value
+                row_entries.append((idx, current_value, new_value))
                 if (
                     auto_fill
-                    and first_row_changed
-                    and first_value
-                    and not has_value(current_value)
-                    and not has_value(new_value)
+                    and seed_value is None
+                    and new_value.strip()
+                    and new_value != str(current_value)
                 ):
-                    updates[idx] = first_value
+                    seed_value = new_value.strip()
+            if auto_fill and seed_value:
+                for idx, current_value, new_value in row_entries:
+                    if not has_value(current_value) and not has_value(new_value):
+                        updates[idx] = seed_value
         st.divider()
     return updates
 
