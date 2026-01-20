@@ -617,6 +617,17 @@ def build_extracteur_path(path):
     return f"{base}_EXTRACTEUR{ext}"
 
 
+def build_extracteur_name(filename):
+    if not filename:
+        return "export_EXTRACTEUR.xlsx"
+    base, ext = os.path.splitext(filename)
+    if not ext:
+        ext = ".xlsx"
+    if base.endswith("_EXTRACTEUR"):
+        return f"{base}{ext}"
+    return f"{base}_EXTRACTEUR{ext}"
+
+
 def init_session_state():
     defaults = {
         "df_full": None,
@@ -744,6 +755,14 @@ def main():
             source_id = f"upload::{uploaded.name}::{uploaded.size}"
             default_name = uploaded.name
             default_path = os.path.join(os.getcwd(), default_name)
+            if st.button("Choisir l'emplacement (dialogue Windows)", key="save_dialog_continue"):
+                chosen = try_tk_save_file(default_name)
+                if chosen:
+                    st.session_state["save_path"] = chosen
+                else:
+                    st.warning(
+                        "Dialogue indisponible. Utilisez le champ de chemin ci-dessous."
+                    )
             path_input = st.text_input(
                 "Chemin de sauvegarde (.xlsx)",
                 value=st.session_state.get("save_path") or default_path,
@@ -880,6 +899,19 @@ def main():
         "Exporter Genius",
         data=genius_data,
         file_name=genius_name,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    auto_data = export_bytes(
+        st.session_state["df_full"],
+        st.session_state["sheet_name"],
+        st.session_state["original_columns"],
+    )
+    auto_name = build_extracteur_name(export_name)
+    st.download_button(
+        "Telecharger auto-sauvegarde (_EXTRACTEUR)",
+        data=auto_data,
+        file_name=auto_name,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
