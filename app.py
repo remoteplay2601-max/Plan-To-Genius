@@ -87,6 +87,41 @@ def inject_styles():
                 radial-gradient(900px 500px at 92% -20%, rgba(88, 211, 199, 0.12), transparent 60%),
                 linear-gradient(180deg, var(--bg1), var(--bg2));
         }
+        html[data-theme="light"] {
+            --bg1: #f4f6fb;
+            --bg2: #e7edf7;
+            --card: rgba(255, 255, 255, 0.92);
+            --accent: #d37a00;
+            --accent-2: #0f8f7f;
+            --text: #0e1525;
+            --muted: #5e6b82;
+            --border: rgba(12, 16, 24, 0.12);
+        }
+        body[data-theme="light"] .stApp,
+        html[data-theme="light"] .stApp {
+            background:
+                radial-gradient(900px 520px at 8% -10%, rgba(211, 122, 0, 0.14), transparent 60%),
+                radial-gradient(900px 520px at 92% -20%, rgba(15, 143, 127, 0.14), transparent 60%),
+                linear-gradient(180deg, var(--bg1), var(--bg2));
+        }
+        @media (prefers-color-scheme: light) {
+            :root {
+                --bg1: #f4f6fb;
+                --bg2: #e7edf7;
+                --card: rgba(255, 255, 255, 0.92);
+                --accent: #d37a00;
+                --accent-2: #0f8f7f;
+                --text: #0e1525;
+                --muted: #5e6b82;
+                --border: rgba(12, 16, 24, 0.12);
+            }
+            .stApp {
+                background:
+                    radial-gradient(900px 520px at 8% -10%, rgba(211, 122, 0, 0.14), transparent 60%),
+                    radial-gradient(900px 520px at 92% -20%, rgba(15, 143, 127, 0.14), transparent 60%),
+                    linear-gradient(180deg, var(--bg1), var(--bg2));
+            }
+        }
         .block-container {
             max-width: 1180px;
             padding-top: 1.2rem;
@@ -175,6 +210,29 @@ def inject_styles():
         .stSelectbox select:focus {
             border-color: var(--accent);
             box-shadow: 0 0 0 2px rgba(244, 185, 66, 0.2);
+        }
+        html[data-theme="light"] .stTextInput input,
+        html[data-theme="light"] .stDateInput input,
+        html[data-theme="light"] .stTimeInput input,
+        html[data-theme="light"] .stSelectbox select,
+        body[data-theme="light"] .stTextInput input,
+        body[data-theme="light"] .stDateInput input,
+        body[data-theme="light"] .stTimeInput input,
+        body[data-theme="light"] .stSelectbox select {
+            background: rgba(255, 255, 255, 0.96);
+            border: 1px solid rgba(12, 16, 24, 0.14);
+            color: #0e1525;
+        }
+        html[data-theme="light"] .stTextInput input:focus,
+        html[data-theme="light"] .stDateInput input:focus,
+        html[data-theme="light"] .stTimeInput input:focus,
+        html[data-theme="light"] .stSelectbox select:focus,
+        body[data-theme="light"] .stTextInput input:focus,
+        body[data-theme="light"] .stDateInput input:focus,
+        body[data-theme="light"] .stTimeInput input:focus,
+        body[data-theme="light"] .stSelectbox select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(211, 122, 0, 0.2);
         }
         .stButton > button {
             border-radius: 12px;
