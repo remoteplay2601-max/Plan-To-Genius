@@ -298,7 +298,9 @@ def build_ui(df_clean, selected_job):
             seed_value = None
             if auto_fill:
                 first_new_stripped = first_new.strip()
-                if first_new_stripped and first_new_stripped != first_display:
+                prev_key = f"prev_{first_key}"
+                prev_value = st.session_state.get(prev_key, first_display)
+                if first_new_stripped and first_new_stripped != prev_value:
                     seed_value = first_new_stripped
 
             for idx, row in rows[1:]:
@@ -316,6 +318,7 @@ def build_ui(df_clean, selected_job):
                     existing_state = st.session_state.get(key, "")
                     if not has_value(existing_state):
                         st.session_state[key] = seed_value
+                        updates[idx] = seed_value
                 col_left, col_right = st.columns([1, 3])
                 col_left.write(str(joint_label))
                 new_value = col_right.text_input(
@@ -326,6 +329,8 @@ def build_ui(df_clean, selected_job):
                 )
                 if new_value != display_value:
                     updates[idx] = new_value
+            if auto_fill:
+                st.session_state[prev_key] = first_new
         st.divider()
     return updates
 
