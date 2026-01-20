@@ -271,48 +271,61 @@ def build_ui(df_clean, selected_job):
             df_field = other_fields[other_fields["CustomFieldName"] == field_name]
             df_field = sorted_group(df_field)
             auto_fill = normalize_key(field_name) in AUTO_FILL_FIELDS
-            row_entries = []
-            for idx, row in df_field.iterrows():
+            rows = list(df_field.iterrows())
+            if not rows:
+                continue
+            first_idx, first_row = rows[0]
+            first_joint = first_row["Operation Description1"]
+            if first_joint is None or (
+                isinstance(first_joint, float) and pd.isna(first_joint)
+            ):
+                first_joint = "(Sans joint)"
+            first_current_raw = first_row["CustomFieldValue"]
+            first_display = "" if not has_value(first_current_raw) else str(
+                first_current_raw
+            )
+            first_key = f"val_{first_idx}"
+            col_left, col_right = st.columns([1, 3])
+            col_left.write(str(first_joint))
+            first_new = col_right.text_input(
+                f"{field_name} {first_idx}",
+                value=first_display,
+                key=first_key,
+                label_visibility="collapsed",
+            )
+            if first_new != first_display:
+                updates[first_idx] = first_new
+            seed_value = None
+            if auto_fill:
+                first_new_stripped = first_new.strip()
+                if first_new_stripped and first_new_stripped != first_display:
+                    seed_value = first_new_stripped
+
+            for idx, row in rows[1:]:
                 joint_label = row["Operation Description1"]
                 if joint_label is None or (
                     isinstance(joint_label, float) and pd.isna(joint_label)
                 ):
                     joint_label = "(Sans joint)"
                 current_value = row["CustomFieldValue"]
-                if current_value is None or (
-                    isinstance(current_value, float) and pd.isna(current_value)
-                ):
-                    current_value = ""
+                display_value = "" if not has_value(current_value) else str(
+                    current_value
+                )
                 key = f"val_{idx}"
+                if auto_fill and seed_value and not has_value(current_value):
+                    existing_state = st.session_state.get(key, "")
+                    if not has_value(existing_state):
+                        st.session_state[key] = seed_value
                 col_left, col_right = st.columns([1, 3])
                 col_left.write(str(joint_label))
                 new_value = col_right.text_input(
                     f"{field_name} {idx}",
-                    value=str(current_value),
+                    value=display_value,
                     key=key,
                     label_visibility="collapsed",
                 )
-                if new_value != str(current_value):
+                if new_value != display_value:
                     updates[idx] = new_value
-                row_entries.append(
-                    {
-                        "idx": idx,
-                        "current": str(current_value),
-                        "new": new_value,
-                        "key": key,
-                    }
-                )
-            if auto_fill and row_entries:
-                first_entry = row_entries[0]
-                first_new = first_entry["new"].strip()
-                first_changed = first_new != first_entry["current"]
-                if first_new and first_changed:
-                    for entry in row_entries[1:]:
-                        if not has_value(entry["current"]) and not has_value(
-                            entry["new"]
-                        ):
-                            updates[entry["idx"]] = first_new
-                            st.session_state[entry["key"]] = first_new
         st.divider()
     return updates
 
