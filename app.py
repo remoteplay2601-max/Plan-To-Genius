@@ -340,10 +340,10 @@ def parse_genius_datetime(value):
     return date(year, month, day), time(hour, minute)
 
 
-def apply_updates(df_clean, updates):
+def apply_updates(df_full, updates):
     if not updates:
-        return df_clean
-    df_updated = df_clean.copy()
+        return df_full
+    df_updated = df_full.copy()
     for idx, value in updates.items():
         if value is None:
             df_updated.at[idx, "CustomFieldValue"] = ""
@@ -410,11 +410,11 @@ def sorted_group(df_group):
     return df_sorted.drop(columns=["_sort_key"])
 
 
-def build_ui(df_clean, selected_job):
+def build_ui(df_view, selected_job):
     updates = {}
-    df_job = df_clean[df_clean["Job"] == selected_job].copy()
+    df_job = df_view[df_view["Job"] == selected_job].copy()
     if df_job.empty:
-        st.info("Aucune ligne pour ce Job apres epuration.")
+        st.info("Aucune ligne pour ce Job.")
         return updates
     total_rows = len(df_job)
     filled_rows = df_job["CustomFieldValue"].apply(has_value).sum()
@@ -470,7 +470,7 @@ def build_ui(df_clean, selected_job):
             )
             formatted = format_datetime(date_value, time_value)
             for idx in df_date.index:
-                if df_clean.at[idx, "CustomFieldValue"] != formatted:
+                if df_view.at[idx, "CustomFieldValue"] != formatted:
                     updates[idx] = formatted
 
         other_fields = df_op[~date_mask]
@@ -617,7 +617,8 @@ def build_extracteur_path(path):
 
 def init_session_state():
     defaults = {
-        "df_clean": None,
+        "df_full": None,
+        "df_view": None,
         "sheet_name": None,
         "save_path": None,
         "auto_save_path": None,
@@ -653,7 +654,8 @@ def main():
     )
     if st.session_state["mode"] != mode:
         st.session_state["mode"] = mode
-        st.session_state["df_clean"] = None
+        st.session_state["df_full"] = None
+        st.session_state["df_view"] = None
         st.session_state["loaded_source_id"] = None
         st.session_state["selected_job"] = None
         st.session_state["updates"] = {}
@@ -764,11 +766,9 @@ def main():
             if missing:
                 st.error(f"Colonnes manquantes: {', '.join(missing)}")
                 return
-            if mode == "Continuer (reprendre la derniere fois)":
-                df_clean = passthrough_df(df_raw)
-            else:
-                df_clean = clean_df(df_raw)
-            st.session_state["df_clean"] = df_clean
+            df_full = df_raw.copy()
+            df_full["_orig_index"] = df_full.index
+            st.session_state["df_full"] = df_full
             st.session_state["sheet_name"] = sheet_name
             st.session_state["original_columns"] = list(df_raw.columns)
             st.session_state["loaded_source_id"] = source_id
@@ -781,13 +781,19 @@ def main():
         st.success(f"Fichier de travail: {st.session_state['save_path']}")
         st.info(f"Sauvegarde auto: {st.session_state['auto_save_path']}")
 
-    df_clean = st.session_state.get("df_clean")
-    if df_clean is None:
+    df_full = st.session_state.get("df_full")
+    if df_full is None:
         return
 
-    jobs = unique_in_order(df_clean["Job"].tolist())
+    if mode == "Continuer (reprendre la derniere fois)":
+        df_view = df_full
+    else:
+        df_view = clean_df(df_full)
+    st.session_state["df_view"] = df_view
+
+    jobs = unique_in_order(df_view["Job"].tolist())
     if not jobs:
-        st.warning("Aucun Job disponible apres epuration.")
+        st.warning("Aucun Job disponible.")
         return
 
     def on_job_change():
@@ -807,16 +813,20 @@ def main():
     )
     st.session_state["selected_job"] = selected_job
 
-    updates = build_ui(df_clean, selected_job)
+    updates = build_ui(df_view, selected_job)
     st.session_state["updates"] = updates
-    df_updated = apply_updates(df_clean, updates)
-    st.session_state["df_clean"] = df_updated
+    df_updated = apply_updates(df_full, updates)
+    st.session_state["df_full"] = df_updated
+    if mode == "Continuer (reprendre la derniere fois)":
+        st.session_state["df_view"] = df_updated
+    else:
+        st.session_state["df_view"] = clean_df(df_updated)
 
     if st.session_state.get("job_changed"):
         auto_path = st.session_state.get("auto_save_path")
         if auto_path:
             save_to_disk(
-                st.session_state["df_clean"],
+                st.session_state["df_full"],
                 auto_path,
                 st.session_state["sheet_name"],
                 st.session_state["original_columns"],
@@ -830,7 +840,7 @@ def main():
     if col_save.button("Sauvegarder maintenant"):
         try:
             save_to_disk(
-                st.session_state["df_clean"],
+                st.session_state["df_full"],
                 st.session_state["save_path"],
                 st.session_state["sheet_name"],
                 st.session_state["original_columns"],
@@ -840,7 +850,7 @@ def main():
             st.error(f"Erreur de sauvegarde: {exc}")
 
     export_data = export_bytes(
-        st.session_state["df_clean"],
+        st.session_state["df_view"],
         st.session_state["sheet_name"],
         st.session_state["original_columns"],
     )
@@ -857,7 +867,7 @@ def main():
     )
 
     genius_data = export_genius_bytes(
-        st.session_state["df_clean"],
+        st.session_state["df_full"],
         st.session_state["sheet_name"],
         st.session_state["original_columns"],
     )
