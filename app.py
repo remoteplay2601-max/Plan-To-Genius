@@ -821,14 +821,6 @@ def main():
 
     if mode == MODE_NEW:
         st.subheader("1) Charger un fichier brut")
-        if st.button("Ouvrir un fichier local (dialogue Windows)"):
-            path = try_tk_open_file()
-            if path:
-                st.session_state["new_input_path"] = path
-            else:
-                st.warning(
-                    "Dialogue indisponible. Utilisez l'upload ou le champ ci-dessous."
-                )
         input_path = st.session_state.get("new_input_path")
         uploaded = st.file_uploader(
             "Uploader un fichier .xlsx",
@@ -851,14 +843,6 @@ def main():
                 if isinstance(file_or_path, str)
                 else uploaded.name
             )
-            if st.button("Choisir l'emplacement (dialogue Windows)"):
-                chosen = try_tk_save_file(default_name)
-                if chosen:
-                    st.session_state["save_path"] = chosen
-                else:
-                    st.warning(
-                        "Dialogue indisponible. Utilisez le champ de chemin ci-dessous."
-                    )
             default_path = os.path.join(os.getcwd(), default_name)
             path_input = st.text_input(
                 "Chemin complet du fichier de travail (.xlsx)",
@@ -923,14 +907,6 @@ def main():
             st.caption("Aucune session recente disponible.")
 
         st.subheader("1) Reprendre un fichier existant")
-        if st.button("Ouvrir un fichier local (dialogue Windows)"):
-            path = try_tk_open_file()
-            if path:
-                st.session_state["cont_input_path"] = path
-            else:
-                st.warning(
-                    "Dialogue indisponible. Utilisez l'upload ou le champ ci-dessous."
-                )
         input_path = st.session_state.get("cont_input_path")
         uploaded = st.file_uploader(
             "Uploader un fichier .xlsx",
@@ -947,14 +923,6 @@ def main():
             source_id = f"upload::{uploaded.name}::{uploaded.size}"
             default_name = uploaded.name
             default_path = os.path.join(os.getcwd(), default_name)
-            if st.button("Choisir l'emplacement (dialogue Windows)", key="save_dialog_continue"):
-                chosen = try_tk_save_file(default_name)
-                if chosen:
-                    st.session_state["save_path"] = chosen
-                else:
-                    st.warning(
-                        "Dialogue indisponible. Utilisez le champ de chemin ci-dessous."
-                    )
             path_input = st.text_input(
                 "Chemin de sauvegarde (.xlsx)",
                 value=st.session_state.get("save_path") or default_path,
