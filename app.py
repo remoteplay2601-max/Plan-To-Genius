@@ -704,6 +704,23 @@ def sanitize_filename(name):
     return name or "session"
 
 
+def recent_key(label, meta):
+    label_key = normalize_text(label)
+    meta = meta or {}
+    project_key = normalize_text(meta.get("project_line", ""))
+    creator_key = normalize_text(meta.get("creator", ""))
+    return f"{label_key}::{project_key}::{creator_key}"
+
+
+def next_session_id(items):
+    max_id = 0
+    for item in items:
+        raw = str(item.get("session_id", "")).lstrip("S")
+        if raw.isdigit():
+            max_id = max(max_id, int(raw))
+    return f"S{max_id + 1:03d}"
+
+
 def save_recent_snapshot(df_full, sheet_name, original_columns, label, meta=None):
     directory = get_recent_dir()
     if not directory:
@@ -717,11 +734,21 @@ def save_recent_snapshot(df_full, sheet_name, original_columns, label, meta=None
     except Exception:
         return None
     items = load_recent_index()
-    items = [item for item in items if item.get("path") != path]
+    key = recent_key(label, meta)
+    existing_id = None
+    filtered = []
+    for item in items:
+        if item.get("key") == key:
+            existing_id = item.get("session_id")
+            continue
+        filtered.append(item)
+    items = filtered
     item = {
+        "session_id": existing_id or next_session_id(items),
         "label": label,
         "path": path,
         "saved_at": stamp,
+        "key": key,
     }
     if isinstance(meta, dict):
         item["project_line"] = meta.get("project_line", "")
@@ -850,6 +877,7 @@ def main():
             options = []
             session_map = {}
             for session in recent_sessions:
+                session_id = session.get("session_id") or "S000"
                 label = session.get("label") or "session"
                 stamp = session.get("saved_at") or ""
                 proj = session.get("project_line", "")
@@ -857,6 +885,7 @@ def main():
                 added = session.get("added_date", "")
                 recent_rows.append(
                     {
+                        "ID": session_id,
                         "Date": stamp,
                         "Projet": proj,
                         "Createur": creator,
@@ -864,7 +893,7 @@ def main():
                         "Fichier": label,
                     }
                 )
-                display = f"{stamp} - {label}"
+                display = f"[{session_id}] {stamp} - {label}"
                 options.append(display)
                 session_map[display] = session
             st.dataframe(pd.DataFrame(recent_rows), use_container_width=True)
@@ -874,7 +903,22 @@ def main():
                 key="recent_select",
             )
             if st.button("Charger la session selectionnee"):
-                st.session_state["recent_session"] = session_map.get(choice)
+                selected = session_map.get(choice)
+                if selected and selected.get("path"):
+                    st.session_state["cont_input_path"] = selected.get("path")
+                    st.session_state["save_path"] = selected.get("path")
+                    st.session_state["auto_save_path"] = build_extracteur_path(
+                        selected.get("path")
+                    )
+                    st.session_state["meta_project_line"] = selected.get(
+                        "project_line", ""
+                    )
+                    st.session_state["meta_creator"] = selected.get("creator", "")
+                    st.session_state["meta_date"] = selected.get("added_date", "")
+                    st.session_state["recent_session"] = None
+                    st.rerun()
+                else:
+                    st.warning("Session introuvable sur le serveur.")
         else:
             st.caption("Aucune session recente disponible.")
 
@@ -893,21 +937,7 @@ def main():
             type=["xlsx"],
             key="uploader_continue",
         )
-        recent_session = st.session_state.get("recent_session")
-        if recent_session:
-            recent_path = recent_session.get("path")
-            file_or_path = recent_path
-            source_id = f"recent::{os.path.abspath(recent_path)}"
-            save_path = recent_path
-            st.session_state["save_path"] = save_path
-            st.session_state["auto_save_path"] = build_extracteur_path(save_path)
-            st.session_state["meta_project_line"] = recent_session.get(
-                "project_line", ""
-            )
-            st.session_state["meta_creator"] = recent_session.get("creator", "")
-            st.session_state["meta_date"] = recent_session.get("added_date", "")
-            st.session_state["recent_session"] = None
-        elif input_path:
+        if input_path:
             file_or_path = input_path
             source_id = f"path::{os.path.abspath(input_path)}"
             save_path = input_path
@@ -936,7 +966,7 @@ def main():
                 "Impossible de recuperer le chemin original depuis l'upload."
             )
         else:
-            st.error("Choisissez un fichier pour continuer.")
+            st.info("Choisissez un fichier ou une session recente pour continuer.")
 
     if file_or_path is not None:
         if st.session_state.get("file_meta_source") != source_id:
