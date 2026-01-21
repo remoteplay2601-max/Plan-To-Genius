@@ -407,13 +407,20 @@ def export_genius_bytes(df_clean, sheet_name, original_columns):
     return output.getvalue()
 
 
-def export_genius_package(df_full, sheet_name, original_columns, base_name, chunk_size=500):
+def export_genius_package(
+    df_full,
+    sheet_name,
+    original_columns,
+    base_name,
+    total_rows_per_file=500,
+):
     genius_df = df_full[df_full["CustomFieldValue"].apply(has_value)].copy()
     genius_df = genius_df.drop(columns=["_orig_index"], errors="ignore")
     if original_columns:
         genius_df = genius_df[original_columns]
     total_rows = len(genius_df)
-    if total_rows <= chunk_size:
+    data_rows_per_file = max(1, total_rows_per_file - 1)
+    if total_rows <= data_rows_per_file:
         data = export_bytes(genius_df, sheet_name, original_columns)
         name = f"genius_{base_name}" if base_name else "genius_export.xlsx"
         return data, name, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -422,8 +429,8 @@ def export_genius_package(df_full, sheet_name, original_columns, base_name, chun
     zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
         part = 1
-        for start in range(0, total_rows, chunk_size):
-            chunk = genius_df.iloc[start : start + chunk_size]
+        for start in range(0, total_rows, data_rows_per_file):
+            chunk = genius_df.iloc[start : start + data_rows_per_file]
             chunk_bytes = export_bytes(chunk, sheet_name, original_columns)
             chunk_name = f"{base_root}_GENIUS_{part:02d}.xlsx"
             zipf.writestr(chunk_name, chunk_bytes)
@@ -1160,7 +1167,7 @@ def main():
         st.session_state["sheet_name"],
         st.session_state["original_columns"],
         export_name,
-        chunk_size=500,
+        total_rows_per_file=500,
     )
     col_genius.download_button(
         "Exporter Genius",
