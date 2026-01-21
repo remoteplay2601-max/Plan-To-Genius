@@ -1181,10 +1181,7 @@ def main():
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
-    if mode == MODE_NEW:
-        genius_source = clean_df(st.session_state["df_full"], drop_filled=True)
-    else:
-        genius_source = st.session_state["df_full"]
+    genius_source = st.session_state["df_full"]
     genius_data, genius_name, genius_mime = export_genius_package(
         genius_source,
         st.session_state["sheet_name"],
