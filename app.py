@@ -143,6 +143,22 @@ def inject_styles():
             padding-top: 1.2rem;
             padding-bottom: 4rem;
         }
+        .grid-tight div[data-testid="stVerticalBlock"] {
+            gap: 0.35rem;
+        }
+        .grid-tight div[data-testid="stHorizontalBlock"] {
+            gap: 0.5rem;
+            align-items: start;
+        }
+        .grid-tight .stTextInput {
+            margin-bottom: 0.15rem;
+        }
+        .grid-tight .joint-tag {
+            margin-bottom: 0.35rem;
+        }
+        .grid-tight .mini-label {
+            margin-bottom: 0.2rem;
+        }
         .hero {
             background: linear-gradient(135deg, rgba(244, 185, 66, 0.12), rgba(79, 209, 197, 0.08));
             border: 1px solid var(--border);
@@ -594,7 +610,8 @@ def build_ui(df_view, selected_job):
                     )
                 joint_rows.sort(key=lambda item: item["sort_key"])
 
-                grid_cols = st.columns([1.2] + [1] * len(grid_fields))
+                st.markdown("<div class='grid-tight'>", unsafe_allow_html=True)
+                grid_cols = st.columns([1.1] + [1] * len(grid_fields))
                 with grid_cols[0]:
                     st.markdown(
                         "<div class='mini-label'>Joint</div>",
@@ -658,6 +675,7 @@ def build_ui(df_view, selected_job):
                             st.session_state[prev_key] = seed_value or st.session_state.get(
                                 prev_key, ""
                             )
+                st.markdown("</div>", unsafe_allow_html=True)
         for field_name in field_names:
             if op_norm == "soud" and normalize_key(field_name) in grid_field_keys:
                 continue
