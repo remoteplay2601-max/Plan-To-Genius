@@ -441,6 +441,7 @@ def build_ui(df_view, selected_job):
             lambda v: normalize_text(v) == normalize_text(DATE_FIELD)
         )
         df_date = df_op[date_mask]
+        formatted_date = None
         if not df_date.empty:
             existing_value = (
                 df_date["CustomFieldValue"]
@@ -473,10 +474,7 @@ def build_ui(df_view, selected_job):
                 key=time_key,
                 label_visibility="collapsed",
             )
-            formatted = format_datetime(date_value, time_value)
-            for idx in df_date.index:
-                if df_view.at[idx, "CustomFieldValue"] != formatted:
-                    updates[idx] = formatted
+            formatted_date = format_datetime(date_value, time_value)
 
         other_fields = df_op[~date_mask]
         field_names = unique_in_order(other_fields["CustomFieldName"].tolist())
@@ -556,6 +554,17 @@ def build_ui(df_view, selected_job):
                     updates[idx] = new_value
             if auto_fill:
                 st.session_state[prev_key] = first_new
+        has_data = False
+        if not other_fields.empty:
+            for idx, row in other_fields.iterrows():
+                value = updates.get(idx, row["CustomFieldValue"])
+                if has_value(value):
+                    has_data = True
+                    break
+        if formatted_date and has_data:
+            for idx in df_date.index:
+                if df_view.at[idx, "CustomFieldValue"] != formatted_date:
+                    updates[idx] = formatted_date
         st.divider()
     return updates
 
