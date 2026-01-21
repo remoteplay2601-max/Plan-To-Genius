@@ -144,20 +144,23 @@ def inject_styles():
             padding-bottom: 4rem;
         }
         .grid-tight div[data-testid="stVerticalBlock"] {
-            gap: 0.35rem;
+            gap: 0.25rem;
         }
         .grid-tight div[data-testid="stHorizontalBlock"] {
-            gap: 0.5rem;
+            gap: 0.4rem;
             align-items: start;
         }
-        .grid-tight .stTextInput {
-            margin-bottom: 0.15rem;
+        .grid-tight div[data-testid="stTextInput"] {
+            margin-bottom: 0.1rem;
         }
         .grid-tight .joint-tag {
-            margin-bottom: 0.35rem;
+            height: 2.05rem;
+            display: inline-flex;
+            align-items: center;
+            margin-bottom: 0.1rem;
         }
         .grid-tight .mini-label {
-            margin-bottom: 0.2rem;
+            margin-bottom: 0.15rem;
         }
         .hero {
             background: linear-gradient(135deg, rgba(244, 185, 66, 0.12), rgba(79, 209, 197, 0.08));
@@ -620,7 +623,7 @@ def build_ui(df_view, selected_job):
                 grid_cols = st.columns([0.7] + [1] * len(grid_fields))
                 with grid_cols[0]:
                     st.markdown(
-                        "<div class='mini-label'>Joint</div>",
+                        "<div class='mini-label'>&nbsp;</div>",
                         unsafe_allow_html=True,
                     )
                     for joint in joint_rows:
