@@ -1168,11 +1168,11 @@ def main():
         st.session_state["sheet_name"],
         st.session_state["original_columns"],
     )
-    export_name = (
-        os.path.basename(st.session_state["save_path"])
-        if st.session_state.get("save_path")
-        else "export.xlsx"
-    )
+    if st.session_state.get("save_path"):
+        export_base = os.path.basename(st.session_state["save_path"])
+    else:
+        export_base = "export.xlsx"
+    export_name = f"NONTERMINE_{export_base}"
     col_export.download_button(
         "Exporter Excel (toutes les lignes)",
         data=export_data,
