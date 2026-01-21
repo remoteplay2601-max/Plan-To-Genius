@@ -1050,7 +1050,10 @@ def main():
     else:
         default_index = 0
 
-    if st.session_state["selected_job"] is None:
+    if (
+        st.session_state["selected_job"] is None
+        or st.session_state["selected_job"] not in jobs
+    ):
         st.session_state["selected_job"] = jobs[default_index]
 
     def on_job_change():
