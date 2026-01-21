@@ -27,7 +27,7 @@ REQUIRED_COLS = [
 
 DATE_FIELD = "DateTermine"
 DEFAULT_TIME = time(15, 0)
-AUTO_FILL_FIELDS = {"diametre", "materiel", "employe1", "sch", "type"}
+AUTO_FILL_FIELDS = {"diametre", "materiel", "employe1", "sch", "type", "posoudurecorrige"}
 MODE_NEW = "Nouveau document"
 MODE_CONTINUE = "Continuer (reprendre un fichier non termine)"
 RECENT_DIR_NAME = ".recent_sessions"
@@ -1163,12 +1163,8 @@ def main():
         except Exception as exc:
             st.error(f"Erreur de sauvegarde: {exc}")
 
-    if mode == MODE_NEW:
-        export_source = clean_df(st.session_state["df_full"], drop_filled=True)
-    else:
-        export_source = st.session_state["df_full"]
     export_data = export_bytes(
-        export_source,
+        st.session_state["df_full"],
         st.session_state["sheet_name"],
         st.session_state["original_columns"],
     )
