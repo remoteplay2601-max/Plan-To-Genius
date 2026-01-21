@@ -794,7 +794,7 @@ def main():
     st.markdown(
         """
         <div class="hero">
-            <div class="hero-title">Qualifab - Saisie CustomFieldValue</div>
+            <div class="hero-title">Qualifab Data Entry Booster for poor Genius</div>
             <div class="hero-sub">Choisissez un mode, chargez un fichier Excel, puis renseignez les valeurs.</div>
         </div>
         """,
