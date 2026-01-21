@@ -594,70 +594,32 @@ def build_ui(df_view, selected_job):
                     )
                 joint_rows.sort(key=lambda item: item["sort_key"])
 
-                header_cols = st.columns([1.2] + [1] * len(grid_fields))
-                header_cols[0].markdown(
-                    "<div class='mini-label'>Joint</div>",
-                    unsafe_allow_html=True,
-                )
-                for idx, field_name in enumerate(grid_fields):
-                    header_cols[idx + 1].markdown(
-                        f"<div class='mini-label'>{html.escape(str(field_name))}</div>",
+                grid_cols = st.columns([1.2] + [1] * len(grid_fields))
+                with grid_cols[0]:
+                    st.markdown(
+                        "<div class='mini-label'>Joint</div>",
                         unsafe_allow_html=True,
                     )
-
-                if joint_rows:
-                    first = joint_rows[0]
-                    seed_values = {}
-                    prev_keys = {}
-                    row_cols = st.columns([1.2] + [1] * len(grid_fields))
-                    row_cols[0].markdown(
-                        f"<span class='joint-tag'>{html.escape(first['label'])}</span>",
-                        unsafe_allow_html=True,
-                    )
-                    for col_idx, field_name in enumerate(grid_fields):
-                        row_idx, current_value = find_row_index(
-                            grid_df, field_name, first["raw"]
-                        )
-                        if row_idx is None:
-                            row_cols[col_idx + 1].text_input(
-                                f"{field_name} {first['label']} missing",
-                                value="",
-                                disabled=True,
-                                label_visibility="collapsed",
-                                placeholder="N/A",
-                            )
-                            continue
-                        display_value = "" if not has_value(current_value) else str(
-                            current_value
-                        )
-                        key = f"grid_{row_idx}"
-                        new_value = row_cols[col_idx + 1].text_input(
-                            f"{field_name} {row_idx}",
-                            value=display_value,
-                            key=key,
-                            label_visibility="collapsed",
-                            placeholder="A remplir",
-                        )
-                        if new_value != display_value:
-                            updates[row_idx] = new_value
-                        prev_key = f"prev_{key}"
-                        prev_value = st.session_state.get(prev_key, display_value)
-                        if new_value.strip() and new_value.strip() != prev_value:
-                            seed_values[field_name] = new_value.strip()
-                        prev_keys[field_name] = prev_key
-
-                    for joint in joint_rows[1:]:
-                        row_cols = st.columns([1.2] + [1] * len(grid_fields))
-                        row_cols[0].markdown(
+                    for joint in joint_rows:
+                        st.markdown(
                             f"<span class='joint-tag'>{html.escape(joint['label'])}</span>",
                             unsafe_allow_html=True,
                         )
-                        for col_idx, field_name in enumerate(grid_fields):
+
+                for col_idx, field_name in enumerate(grid_fields):
+                    with grid_cols[col_idx + 1]:
+                        st.markdown(
+                            f"<div class='mini-label'>{html.escape(str(field_name))}</div>",
+                            unsafe_allow_html=True,
+                        )
+                        seed_value = None
+                        prev_key = None
+                        for row_pos, joint in enumerate(joint_rows):
                             row_idx, current_value = find_row_index(
                                 grid_df, field_name, joint["raw"]
                             )
                             if row_idx is None:
-                                row_cols[col_idx + 1].text_input(
+                                st.text_input(
                                     f"{field_name} {joint['label']} missing",
                                     value="",
                                     disabled=True,
@@ -666,17 +628,17 @@ def build_ui(df_view, selected_job):
                                 )
                                 continue
                             key = f"grid_{row_idx}"
-                            if field_name in seed_values and not has_value(
+                            display_value = "" if not has_value(
+                                current_value
+                            ) else str(current_value)
+                            if row_pos > 0 and seed_value and not has_value(
                                 current_value
                             ):
                                 existing_state = st.session_state.get(key, "")
                                 if not has_value(existing_state):
-                                    st.session_state[key] = seed_values[field_name]
-                                    updates[row_idx] = seed_values[field_name]
-                            display_value = "" if not has_value(
-                                current_value
-                            ) else str(current_value)
-                            new_value = row_cols[col_idx + 1].text_input(
+                                    st.session_state[key] = seed_value
+                                    updates[row_idx] = seed_value
+                            new_value = st.text_input(
                                 f"{field_name} {row_idx}",
                                 value=display_value,
                                 key=key,
@@ -685,11 +647,17 @@ def build_ui(df_view, selected_job):
                             )
                             if new_value != display_value:
                                 updates[row_idx] = new_value
-
-                    for field_name, prev_key in prev_keys.items():
-                        st.session_state[prev_key] = seed_values.get(
-                            field_name, st.session_state.get(prev_key, "")
-                        )
+                            if row_pos == 0:
+                                prev_key = f"prev_{key}"
+                                prev_value = st.session_state.get(
+                                    prev_key, display_value
+                                )
+                                if new_value.strip() and new_value.strip() != prev_value:
+                                    seed_value = new_value.strip()
+                        if prev_key:
+                            st.session_state[prev_key] = seed_value or st.session_state.get(
+                                prev_key, ""
+                            )
         for field_name in field_names:
             if op_norm == "soud" and normalize_key(field_name) in grid_field_keys:
                 continue
