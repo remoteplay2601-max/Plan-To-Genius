@@ -31,7 +31,7 @@ MODE_NEW = "Nouveau document"
 MODE_CONTINUE = "Continuer (reprendre un fichier non termine)"
 RECENT_DIR_NAME = ".recent_sessions"
 RECENT_INDEX_NAME = "index.json"
-RECENT_LIMIT = 5
+RECENT_LIMIT = 30
 
 
 def has_value(val):
@@ -1168,18 +1168,6 @@ def main():
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
-    auto_data = export_bytes(
-        st.session_state["df_full"],
-        st.session_state["sheet_name"],
-        st.session_state["original_columns"],
-    )
-    auto_name = build_extracteur_name(export_name)
-    st.download_button(
-        "Telecharger auto-sauvegarde (_EXTRACTEUR)",
-        data=auto_data,
-        file_name=auto_name,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
 
 
 if __name__ == "__main__":
