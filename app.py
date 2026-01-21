@@ -603,13 +603,20 @@ def build_ui(df_view, selected_job):
             if auto_fill:
                 st.session_state[prev_key] = first_new
         has_data = False
+        has_employe = False
         if not other_fields.empty:
             for idx, row in other_fields.iterrows():
                 value = updates.get(idx, row["CustomFieldValue"])
                 if has_value(value):
                     has_data = True
-                    break
-        if formatted_date and has_data:
+                    field_key = normalize_key(row["CustomFieldName"])
+                    if field_key == "employe1":
+                        has_employe = True
+                    if has_data and has_employe:
+                        break
+        require_employe = normalize_text(op_code) == "soud"
+        allow_date = has_data and (has_employe if require_employe else True)
+        if formatted_date and allow_date:
             for idx in df_date.index:
                 if df_view.at[idx, "CustomFieldValue"] != formatted_date:
                     updates[idx] = formatted_date
