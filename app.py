@@ -199,10 +199,13 @@ def inject_styles():
             font-size: 0.85rem;
             background: rgba(79, 209, 197, 0.12);
             color: #d7fef7;
-            padding: 0.2rem 0.55rem;
+            padding: 0 0.5rem;
             border-radius: 10px;
             border: 1px solid rgba(79, 209, 197, 0.35);
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            height: 2.05rem;
+            margin-bottom: 0.2rem;
         }
         .mini-label {
             font-size: 0.75rem;
@@ -212,7 +215,7 @@ def inject_styles():
             margin-bottom: 0.25rem;
         }
         div[data-testid="stHorizontalBlock"] {
-            gap: 0.8rem;
+            gap: 0.4rem;
             align-items: center;
         }
         .stTextInput input,
@@ -222,8 +225,11 @@ def inject_styles():
             background: rgba(12, 16, 24, 0.9);
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 12px;
-            height: 2.4rem;
+            height: 2.05rem;
             color: var(--text);
+        }
+        div[data-testid="stTextInput"] {
+            margin-bottom: 0.2rem;
         }
         .stTimeInput div[data-baseweb="select"] > div,
         .stSelectbox div[data-baseweb="select"] > div {
@@ -611,7 +617,7 @@ def build_ui(df_view, selected_job):
                 joint_rows.sort(key=lambda item: item["sort_key"])
 
                 st.markdown("<div class='grid-tight'>", unsafe_allow_html=True)
-                grid_cols = st.columns([1.1] + [1] * len(grid_fields))
+                grid_cols = st.columns([0.7] + [1] * len(grid_fields))
                 with grid_cols[0]:
                     st.markdown(
                         "<div class='mini-label'>Joint</div>",
