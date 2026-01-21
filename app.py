@@ -4,6 +4,7 @@ import os
 import re
 import tempfile
 import unicodedata
+import zipfile
 from datetime import date, datetime, time
 from io import BytesIO
 
@@ -404,6 +405,31 @@ def export_genius_bytes(df_clean, sheet_name, original_columns):
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         genius_df.to_excel(writer, sheet_name=sheet_name, index=False)
     return output.getvalue()
+
+
+def export_genius_package(df_full, sheet_name, original_columns, base_name, chunk_size=500):
+    genius_df = df_full[df_full["CustomFieldValue"].apply(has_value)].copy()
+    genius_df = genius_df.drop(columns=["_orig_index"], errors="ignore")
+    if original_columns:
+        genius_df = genius_df[original_columns]
+    total_rows = len(genius_df)
+    if total_rows <= chunk_size:
+        data = export_bytes(genius_df, sheet_name, original_columns)
+        name = f"genius_{base_name}" if base_name else "genius_export.xlsx"
+        return data, name, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+    base_root = os.path.splitext(base_name or "genius_export.xlsx")[0]
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+        part = 1
+        for start in range(0, total_rows, chunk_size):
+            chunk = genius_df.iloc[start : start + chunk_size]
+            chunk_bytes = export_bytes(chunk, sheet_name, original_columns)
+            chunk_name = f"{base_root}_GENIUS_{part:02d}.xlsx"
+            zipf.writestr(chunk_name, chunk_bytes)
+            part += 1
+    zip_name = f"{base_root}_GENIUS_split.zip"
+    return zip_buffer.getvalue(), zip_name, "application/zip"
 
 
 def unique_in_order(values):
@@ -1129,19 +1155,18 @@ def main():
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
-    genius_data = export_genius_bytes(
+    genius_data, genius_name, genius_mime = export_genius_package(
         st.session_state["df_full"],
         st.session_state["sheet_name"],
         st.session_state["original_columns"],
-    )
-    genius_name = (
-        f"genius_{export_name}" if export_name else "genius_export.xlsx"
+        export_name,
+        chunk_size=500,
     )
     col_genius.download_button(
         "Exporter Genius",
         data=genius_data,
         file_name=genius_name,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        mime=genius_mime,
     )
 
 
