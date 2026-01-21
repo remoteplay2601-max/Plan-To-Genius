@@ -288,6 +288,16 @@ def clean_df(df, drop_filled=True):
     return df_clean
 
 
+def job_has_missing(df_full, job_value):
+    if df_full is None:
+        return False
+    df_check = clean_df(df_full, drop_filled=False)
+    df_job = df_check[df_check["Job"] == job_value]
+    if df_job.empty:
+        return False
+    return (~df_job["CustomFieldValue"].apply(has_value)).any()
+
+
 def passthrough_df(df):
     df_copy = df.copy()
     df_copy["_orig_index"] = df_copy.index
@@ -648,6 +658,7 @@ def init_session_state():
         "save_path": None,
         "auto_save_path": None,
         "selected_job": None,
+        "pending_job": None,
         "updates": {},
         "original_columns": None,
         "loaded_source_id": None,
@@ -830,22 +841,52 @@ def main():
         st.warning("Aucun Job disponible.")
         return
 
-    def on_job_change():
-        st.session_state["job_changed"] = True
-
     if st.session_state["selected_job"] in jobs:
         default_index = jobs.index(st.session_state["selected_job"])
     else:
         default_index = 0
 
-    selected_job = st.selectbox(
+    if "job_select" not in st.session_state or st.session_state["job_select"] not in jobs:
+        st.session_state["job_select"] = jobs[default_index]
+
+    st.selectbox(
         "Job",
         jobs,
-        index=default_index,
+        index=jobs.index(st.session_state["job_select"]),
         key="job_select",
-        on_change=on_job_change,
     )
-    st.session_state["selected_job"] = selected_job
+
+    requested_job = st.session_state["job_select"]
+    current_job = st.session_state["selected_job"] or jobs[default_index]
+    st.session_state["selected_job"] = current_job
+
+    if requested_job != current_job:
+        st.session_state["pending_job"] = requested_job
+
+    pending_job = st.session_state.get("pending_job")
+    if pending_job and pending_job != current_job:
+        if job_has_missing(df_full, current_job):
+            st.session_state["job_select"] = current_job
+            st.warning(
+                "Des champs ne sont pas remplis pour ce Job. Voulez-vous vraiment changer?"
+            )
+            col_stay, col_leave = st.columns(2)
+            if col_stay.button("Rester sur ce Job"):
+                st.session_state["pending_job"] = None
+                st.rerun()
+            if col_leave.button("Changer quand meme"):
+                st.session_state["selected_job"] = pending_job
+                st.session_state["job_select"] = pending_job
+                st.session_state["pending_job"] = None
+                st.session_state["job_changed"] = True
+                st.rerun()
+        else:
+            st.session_state["selected_job"] = pending_job
+            st.session_state["job_select"] = pending_job
+            st.session_state["pending_job"] = None
+            st.session_state["job_changed"] = True
+
+    selected_job = st.session_state["selected_job"]
     if mode != MODE_CONTINUE:
         st.checkbox(
             "Masquer les lignes deja remplies",
