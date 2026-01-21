@@ -887,7 +887,7 @@ def main():
                     {
                         "ID": session_id,
                         "Date": stamp,
-                        "Projet": proj,
+                "Numero de projet": proj,
                         "Createur": creator,
                         "Ajoute": added,
                         "Fichier": label,
@@ -976,7 +976,7 @@ def main():
             st.session_state["file_meta_source"] = source_id
 
         meta_col1, meta_col2 = st.columns(2)
-        meta_col1.text_input("Ligne projet", key="meta_project_line")
+        meta_col1.text_input("Numero de projet", key="meta_project_line")
         meta_col2.text_input("Createur", key="meta_creator")
         if not st.session_state.get("meta_date"):
             st.session_state["meta_date"] = get_now_quebec().date().isoformat()
@@ -1155,7 +1155,7 @@ def main():
         else "export.xlsx"
     )
     col_export.download_button(
-        "Exporter Excel",
+        "Exporter Excel (toutes les lignes)",
         data=export_data,
         file_name=export_name,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
