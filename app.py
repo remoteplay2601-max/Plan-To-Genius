@@ -1015,8 +1015,11 @@ def main():
             if missing:
                 st.error(f"Colonnes manquantes: {', '.join(missing)}")
                 return
-            df_full = df_raw.copy()
-            df_full["_orig_index"] = df_full.index
+            if mode == MODE_NEW:
+                df_full = clean_df(df_raw, drop_filled=True)
+            else:
+                df_full = df_raw.copy()
+                df_full["_orig_index"] = df_full.index
             st.session_state["df_full"] = df_full
             st.session_state["sheet_name"] = sheet_name
             st.session_state["original_columns"] = list(df_raw.columns)
