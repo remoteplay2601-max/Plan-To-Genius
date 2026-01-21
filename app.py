@@ -28,6 +28,14 @@ REQUIRED_COLS = [
 DATE_FIELD = "DateTermine"
 DEFAULT_TIME = time(15, 0)
 AUTO_FILL_FIELDS = {"diametre", "materiel", "employe1", "sch", "type", "posoudurecorrige"}
+SOUD_GRID_FIELDS = [
+    "Diametre",
+    "Employe_1",
+    "Materiel",
+    "PoSoudureCorrige",
+    "SCH",
+    "Type",
+]
 MODE_NEW = "Nouveau document"
 MODE_CONTINUE = "Continuer (reprendre un fichier non termine)"
 RECENT_DIR_NAME = ".recent_sessions"
@@ -478,6 +486,17 @@ def build_ui(df_view, selected_job):
         )
 
     op_codes = unique_in_order(df_job["OperationCode"].tolist())
+    def find_row_index(df_field, field_name, joint_raw):
+        if joint_raw is None or (isinstance(joint_raw, float) and pd.isna(joint_raw)):
+            joint_mask = df_field["Operation Description1"].isna()
+        else:
+            joint_mask = df_field["Operation Description1"] == joint_raw
+        field_mask = df_field["CustomFieldName"] == field_name
+        match = df_field[joint_mask & field_mask]
+        if match.empty:
+            return None, None
+        return match.index[0], match.iloc[0]["CustomFieldValue"]
+
     for op_code in op_codes:
         st.markdown(
             f"<div class='op-header'>Operation {html.escape(str(op_code))}</div>",
@@ -526,7 +545,154 @@ def build_ui(df_view, selected_job):
 
         other_fields = df_op[~date_mask]
         field_names = unique_in_order(other_fields["CustomFieldName"].tolist())
+        op_norm = normalize_text(op_code)
+        grid_field_keys = set()
+        if op_norm == "soud" and not other_fields.empty:
+            field_map = {}
+            for name in field_names:
+                key = normalize_key(name)
+                if key not in field_map:
+                    field_map[key] = name
+            grid_fields = [
+                field_map[key]
+                for key in (normalize_key(name) for name in SOUD_GRID_FIELDS)
+                if key in field_map
+            ]
+            grid_field_keys = {normalize_key(name) for name in grid_fields}
+            grid_df = other_fields[
+                other_fields["CustomFieldName"].apply(
+                    lambda v: normalize_key(v) in grid_field_keys
+                )
+            ]
+            if grid_fields and not grid_df.empty:
+                st.markdown(
+                    "<div class='field-header'>SOUD - Saisie par joint</div>",
+                    unsafe_allow_html=True,
+                )
+                joint_rows = []
+                seen = set()
+                for idx, row in grid_df.iterrows():
+                    joint_raw = row["Operation Description1"]
+                    joint_label = (
+                        "(Sans joint)"
+                        if joint_raw is None
+                        or (isinstance(joint_raw, float) and pd.isna(joint_raw))
+                        else str(joint_raw)
+                    )
+                    joint_key = joint_label
+                    if joint_key in seen:
+                        continue
+                    seen.add(joint_key)
+                    joint_rows.append(
+                        {
+                            "raw": joint_raw,
+                            "label": joint_label,
+                            "sort_key": natural_sort_key_joint(
+                                joint_raw, row["_orig_index"]
+                            ),
+                        }
+                    )
+                joint_rows.sort(key=lambda item: item["sort_key"])
+
+                header_cols = st.columns([1.2] + [1] * len(grid_fields))
+                header_cols[0].markdown(
+                    "<div class='mini-label'>Joint</div>",
+                    unsafe_allow_html=True,
+                )
+                for idx, field_name in enumerate(grid_fields):
+                    header_cols[idx + 1].markdown(
+                        f"<div class='mini-label'>{html.escape(str(field_name))}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                if joint_rows:
+                    first = joint_rows[0]
+                    seed_values = {}
+                    prev_keys = {}
+                    row_cols = st.columns([1.2] + [1] * len(grid_fields))
+                    row_cols[0].markdown(
+                        f"<span class='joint-tag'>{html.escape(first['label'])}</span>",
+                        unsafe_allow_html=True,
+                    )
+                    for col_idx, field_name in enumerate(grid_fields):
+                        row_idx, current_value = find_row_index(
+                            grid_df, field_name, first["raw"]
+                        )
+                        if row_idx is None:
+                            row_cols[col_idx + 1].text_input(
+                                f"{field_name} {first['label']} missing",
+                                value="",
+                                disabled=True,
+                                label_visibility="collapsed",
+                                placeholder="N/A",
+                            )
+                            continue
+                        display_value = "" if not has_value(current_value) else str(
+                            current_value
+                        )
+                        key = f"grid_{row_idx}"
+                        new_value = row_cols[col_idx + 1].text_input(
+                            f"{field_name} {row_idx}",
+                            value=display_value,
+                            key=key,
+                            label_visibility="collapsed",
+                            placeholder="A remplir",
+                        )
+                        if new_value != display_value:
+                            updates[row_idx] = new_value
+                        prev_key = f"prev_{key}"
+                        prev_value = st.session_state.get(prev_key, display_value)
+                        if new_value.strip() and new_value.strip() != prev_value:
+                            seed_values[field_name] = new_value.strip()
+                        prev_keys[field_name] = prev_key
+
+                    for joint in joint_rows[1:]:
+                        row_cols = st.columns([1.2] + [1] * len(grid_fields))
+                        row_cols[0].markdown(
+                            f"<span class='joint-tag'>{html.escape(joint['label'])}</span>",
+                            unsafe_allow_html=True,
+                        )
+                        for col_idx, field_name in enumerate(grid_fields):
+                            row_idx, current_value = find_row_index(
+                                grid_df, field_name, joint["raw"]
+                            )
+                            if row_idx is None:
+                                row_cols[col_idx + 1].text_input(
+                                    f"{field_name} {joint['label']} missing",
+                                    value="",
+                                    disabled=True,
+                                    label_visibility="collapsed",
+                                    placeholder="N/A",
+                                )
+                                continue
+                            key = f"grid_{row_idx}"
+                            if field_name in seed_values and not has_value(
+                                current_value
+                            ):
+                                existing_state = st.session_state.get(key, "")
+                                if not has_value(existing_state):
+                                    st.session_state[key] = seed_values[field_name]
+                                    updates[row_idx] = seed_values[field_name]
+                            display_value = "" if not has_value(
+                                current_value
+                            ) else str(current_value)
+                            new_value = row_cols[col_idx + 1].text_input(
+                                f"{field_name} {row_idx}",
+                                value=display_value,
+                                key=key,
+                                label_visibility="collapsed",
+                                placeholder="A remplir",
+                            )
+                            if new_value != display_value:
+                                updates[row_idx] = new_value
+
+                    for field_name, prev_key in prev_keys.items():
+                        st.session_state[prev_key] = seed_values.get(
+                            field_name, st.session_state.get(prev_key, "")
+                        )
         for field_name in field_names:
+            if op_norm == "soud" and normalize_key(field_name) in grid_field_keys:
+                continue
             st.markdown(
                 f"<div class='field-header'>{html.escape(str(field_name))}</div>",
                 unsafe_allow_html=True,
