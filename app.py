@@ -24,7 +24,7 @@ REQUIRED_COLS = [
 
 DATE_FIELD = "DateTermine"
 DEFAULT_TIME = time(15, 0)
-AUTO_FILL_FIELDS = {"materiel", "employe1", "sch", "type"}
+AUTO_FILL_FIELDS = {"diametre", "materiel", "employe1", "sch", "type"}
 MODE_NEW = "Nouveau document"
 MODE_CONTINUE = "Continuer (reprendre un fichier non termine)"
 
