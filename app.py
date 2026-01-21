@@ -986,6 +986,14 @@ def main():
             "creator": st.session_state.get("meta_creator", ""),
             "added_date": st.session_state.get("meta_date", ""),
         }
+        if (
+            not st.session_state["meta_project_line"].strip()
+            or not st.session_state["meta_creator"].strip()
+        ):
+            st.warning(
+                "Veuillez remplir la ligne de projet et le createur avant de continuer."
+            )
+            return
 
     if file_or_path is not None and save_path:
         if st.session_state["loaded_source_id"] != source_id:
