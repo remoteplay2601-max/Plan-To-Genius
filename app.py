@@ -846,27 +846,25 @@ def main():
     else:
         default_index = 0
 
-    if "job_select" not in st.session_state or st.session_state["job_select"] not in jobs:
-        st.session_state["job_select"] = jobs[default_index]
+    if st.session_state["selected_job"] is None:
+        st.session_state["selected_job"] = jobs[default_index]
+
+    def on_job_change():
+        new_value = st.session_state["job_select"]
+        st.session_state["pending_job"] = new_value
 
     st.selectbox(
         "Job",
         jobs,
-        index=jobs.index(st.session_state["job_select"]),
+        index=jobs.index(st.session_state["selected_job"]),
         key="job_select",
+        on_change=on_job_change,
     )
 
-    requested_job = st.session_state["job_select"]
-    current_job = st.session_state["selected_job"] or jobs[default_index]
-    st.session_state["selected_job"] = current_job
-
-    if requested_job != current_job:
-        st.session_state["pending_job"] = requested_job
-
+    current_job = st.session_state["selected_job"]
     pending_job = st.session_state.get("pending_job")
     if pending_job and pending_job != current_job:
         if job_has_missing(df_full, current_job):
-            st.session_state["job_select"] = current_job
             st.warning(
                 "Des champs ne sont pas remplis pour ce Job. Voulez-vous vraiment changer?"
             )
@@ -876,13 +874,11 @@ def main():
                 st.rerun()
             if col_leave.button("Changer quand meme"):
                 st.session_state["selected_job"] = pending_job
-                st.session_state["job_select"] = pending_job
                 st.session_state["pending_job"] = None
                 st.session_state["job_changed"] = True
                 st.rerun()
         else:
             st.session_state["selected_job"] = pending_job
-            st.session_state["job_select"] = pending_job
             st.session_state["pending_job"] = None
             st.session_state["job_changed"] = True
 
