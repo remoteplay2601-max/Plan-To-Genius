@@ -806,7 +806,7 @@ def init_session_state():
         "loaded_source_id": None,
         "job_changed": False,
         "mode": None,
-        "hide_filled_rows": False,
+        "hide_filled_rows": True,
         "recent_path": None,
         "recent_session": None,
         "file_meta": {},
@@ -847,6 +847,7 @@ def main():
         st.session_state["updates"] = {}
         st.session_state["save_path"] = None
         st.session_state["auto_save_path"] = None
+        st.session_state["hide_filled_rows"] = mode == MODE_NEW
 
     file_or_path = None
     source_id = None
@@ -1107,8 +1108,12 @@ def main():
     if st.session_state.get("job_changed"):
         auto_path = st.session_state.get("auto_save_path")
         if auto_path:
+            if mode == MODE_NEW:
+                df_to_save = clean_df(st.session_state["df_full"], drop_filled=True)
+            else:
+                df_to_save = st.session_state["df_full"]
             save_to_disk(
-                st.session_state["df_full"],
+                df_to_save,
                 auto_path,
                 st.session_state["sheet_name"],
                 st.session_state["original_columns"],
@@ -1128,8 +1133,12 @@ def main():
     col_save, col_export, col_genius = st.columns(3)
     if col_save.button("Sauvegarder maintenant"):
         try:
+            if mode == MODE_NEW:
+                df_to_save = clean_df(st.session_state["df_full"], drop_filled=True)
+            else:
+                df_to_save = st.session_state["df_full"]
             save_to_disk(
-                st.session_state["df_full"],
+                df_to_save,
                 st.session_state["save_path"],
                 st.session_state["sheet_name"],
                 st.session_state["original_columns"],
@@ -1145,8 +1154,12 @@ def main():
         except Exception as exc:
             st.error(f"Erreur de sauvegarde: {exc}")
 
+    if mode == MODE_NEW:
+        export_source = clean_df(st.session_state["df_full"], drop_filled=True)
+    else:
+        export_source = st.session_state["df_full"]
     export_data = export_bytes(
-        clean_df(st.session_state["df_full"], drop_filled=True),
+        export_source,
         st.session_state["sheet_name"],
         st.session_state["original_columns"],
     )
