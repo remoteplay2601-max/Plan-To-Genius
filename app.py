@@ -704,7 +704,7 @@ def sanitize_filename(name):
     return name or "session"
 
 
-def save_recent_snapshot(df_full, sheet_name, original_columns, label):
+def save_recent_snapshot(df_full, sheet_name, original_columns, label, meta=None):
     directory = get_recent_dir()
     if not directory:
         return None
@@ -718,14 +718,16 @@ def save_recent_snapshot(df_full, sheet_name, original_columns, label):
         return None
     items = load_recent_index()
     items = [item for item in items if item.get("path") != path]
-    items.insert(
-        0,
-        {
-            "label": label,
-            "path": path,
-            "saved_at": stamp,
-        },
-    )
+    item = {
+        "label": label,
+        "path": path,
+        "saved_at": stamp,
+    }
+    if isinstance(meta, dict):
+        item["project_line"] = meta.get("project_line", "")
+        item["creator"] = meta.get("creator", "")
+        item["added_date"] = meta.get("added_date", "")
+    items.insert(0, item)
     save_recent_index(items[:RECENT_LIMIT])
     return path
 
@@ -746,6 +748,12 @@ def init_session_state():
         "mode": None,
         "hide_filled_rows": False,
         "recent_path": None,
+        "recent_session": None,
+        "file_meta": {},
+        "file_meta_source": None,
+        "meta_project_line": "",
+        "meta_creator": "",
+        "meta_date": "",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -838,21 +846,35 @@ def main():
         st.subheader("0) Reouvrir une session recente")
         recent_sessions = load_recent_index()
         if recent_sessions:
+            recent_rows = []
             options = []
             session_map = {}
             for session in recent_sessions:
                 label = session.get("label") or "session"
                 stamp = session.get("saved_at") or ""
+                proj = session.get("project_line", "")
+                creator = session.get("creator", "")
+                added = session.get("added_date", "")
+                recent_rows.append(
+                    {
+                        "Date": stamp,
+                        "Projet": proj,
+                        "Createur": creator,
+                        "Ajoute": added,
+                        "Fichier": label,
+                    }
+                )
                 display = f"{stamp} - {label}"
                 options.append(display)
-                session_map[display] = session.get("path")
+                session_map[display] = session
+            st.dataframe(pd.DataFrame(recent_rows), use_container_width=True)
             choice = st.selectbox(
                 "Sessions recentes (serveur)",
                 options,
                 key="recent_select",
             )
             if st.button("Charger la session selectionnee"):
-                st.session_state["recent_path"] = session_map.get(choice)
+                st.session_state["recent_session"] = session_map.get(choice)
         else:
             st.caption("Aucune session recente disponible.")
 
@@ -871,14 +893,20 @@ def main():
             type=["xlsx"],
             key="uploader_continue",
         )
-        recent_path = st.session_state.get("recent_path")
-        if recent_path:
+        recent_session = st.session_state.get("recent_session")
+        if recent_session:
+            recent_path = recent_session.get("path")
             file_or_path = recent_path
             source_id = f"recent::{os.path.abspath(recent_path)}"
             save_path = recent_path
             st.session_state["save_path"] = save_path
             st.session_state["auto_save_path"] = build_extracteur_path(save_path)
-            st.session_state["recent_path"] = None
+            st.session_state["meta_project_line"] = recent_session.get(
+                "project_line", ""
+            )
+            st.session_state["meta_creator"] = recent_session.get("creator", "")
+            st.session_state["meta_date"] = recent_session.get("added_date", "")
+            st.session_state["recent_session"] = None
         elif input_path:
             file_or_path = input_path
             source_id = f"path::{os.path.abspath(input_path)}"
@@ -910,6 +938,25 @@ def main():
         else:
             st.error("Choisissez un fichier pour continuer.")
 
+    if file_or_path is not None:
+        if st.session_state.get("file_meta_source") != source_id:
+            st.session_state["meta_project_line"] = ""
+            st.session_state["meta_creator"] = ""
+            st.session_state["meta_date"] = get_now_quebec().date().isoformat()
+            st.session_state["file_meta_source"] = source_id
+
+        meta_col1, meta_col2 = st.columns(2)
+        meta_col1.text_input("Ligne projet", key="meta_project_line")
+        meta_col2.text_input("Createur", key="meta_creator")
+        if not st.session_state.get("meta_date"):
+            st.session_state["meta_date"] = get_now_quebec().date().isoformat()
+        st.caption(f"Date: {st.session_state['meta_date']}")
+        st.session_state["file_meta"] = {
+            "project_line": st.session_state.get("meta_project_line", ""),
+            "creator": st.session_state.get("meta_creator", ""),
+            "added_date": st.session_state.get("meta_date", ""),
+        }
+
     if file_or_path is not None and save_path:
         if st.session_state["loaded_source_id"] != source_id:
             try:
@@ -931,6 +978,13 @@ def main():
             st.session_state["updates"] = {}
             st.session_state["auto_save_path"] = build_extracteur_path(
                 st.session_state["save_path"]
+            )
+            save_recent_snapshot(
+                st.session_state["df_full"],
+                st.session_state["sheet_name"],
+                st.session_state["original_columns"],
+                os.path.basename(st.session_state.get("save_path") or "session"),
+                meta=st.session_state.get("file_meta"),
             )
 
         st.success(f"Fichier de travail: {st.session_state['save_path']}")
@@ -1025,6 +1079,7 @@ def main():
                 st.session_state["sheet_name"],
                 st.session_state["original_columns"],
                 os.path.basename(st.session_state.get("save_path") or "session"),
+                meta=st.session_state.get("file_meta"),
             )
             st.success("Sauvegarde automatique effectuee.")
         else:
@@ -1045,6 +1100,7 @@ def main():
                 st.session_state["sheet_name"],
                 st.session_state["original_columns"],
                 os.path.basename(st.session_state.get("save_path") or "session"),
+                meta=st.session_state.get("file_meta"),
             )
             st.success("Sauvegarde terminee.")
         except Exception as exc:
