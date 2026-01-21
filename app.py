@@ -1143,12 +1143,8 @@ def main():
     col_save, col_export, col_genius = st.columns(3)
     if col_save.button("Sauvegarder maintenant"):
         try:
-            if mode == MODE_NEW:
-                df_to_save = clean_df(st.session_state["df_full"], drop_filled=True)
-            else:
-                df_to_save = st.session_state["df_full"]
             save_to_disk(
-                df_to_save,
+                st.session_state["df_full"],
                 st.session_state["save_path"],
                 st.session_state["sheet_name"],
                 st.session_state["original_columns"],
