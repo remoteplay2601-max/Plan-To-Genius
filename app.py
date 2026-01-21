@@ -1,6 +1,8 @@
 import html
+import json
 import os
 import re
+import tempfile
 import unicodedata
 from datetime import date, datetime, time
 from io import BytesIO
@@ -27,6 +29,9 @@ DEFAULT_TIME = time(15, 0)
 AUTO_FILL_FIELDS = {"diametre", "materiel", "employe1", "sch", "type"}
 MODE_NEW = "Nouveau document"
 MODE_CONTINUE = "Continuer (reprendre un fichier non termine)"
+RECENT_DIR_NAME = ".recent_sessions"
+RECENT_INDEX_NAME = "index.json"
+RECENT_LIMIT = 5
 
 
 def has_value(val):
@@ -650,6 +655,81 @@ def build_extracteur_name(filename):
     return f"{base}_EXTRACTEUR{ext}"
 
 
+def get_recent_dir():
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    for root in (base_dir, os.getcwd(), tempfile.gettempdir()):
+        try:
+            path = os.path.join(root, RECENT_DIR_NAME)
+            os.makedirs(path, exist_ok=True)
+            return path
+        except Exception:
+            continue
+    return ""
+
+
+def load_recent_index():
+    directory = get_recent_dir()
+    if not directory:
+        return []
+    index_path = os.path.join(directory, RECENT_INDEX_NAME)
+    if not os.path.exists(index_path):
+        return []
+    try:
+        with open(index_path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        if isinstance(data, list):
+            return data
+        return []
+    except Exception:
+        return []
+
+
+def save_recent_index(items):
+    directory = get_recent_dir()
+    if not directory:
+        return
+    index_path = os.path.join(directory, RECENT_INDEX_NAME)
+    try:
+        with open(index_path, "w", encoding="utf-8") as handle:
+            json.dump(items, handle, indent=2)
+    except Exception:
+        return
+
+
+def sanitize_filename(name):
+    if not name:
+        return "session"
+    name = re.sub(r"[^A-Za-z0-9._-]+", "_", name)
+    name = name.strip("._")
+    return name or "session"
+
+
+def save_recent_snapshot(df_full, sheet_name, original_columns, label):
+    directory = get_recent_dir()
+    if not directory:
+        return None
+    safe_label = sanitize_filename(label)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{stamp}_{safe_label}.xlsx"
+    path = os.path.join(directory, filename)
+    try:
+        save_to_disk(df_full, path, sheet_name, original_columns)
+    except Exception:
+        return None
+    items = load_recent_index()
+    items = [item for item in items if item.get("path") != path]
+    items.insert(
+        0,
+        {
+            "label": label,
+            "path": path,
+            "saved_at": stamp,
+        },
+    )
+    save_recent_index(items[:RECENT_LIMIT])
+    return path
+
+
 def init_session_state():
     defaults = {
         "df_full": None,
@@ -665,6 +745,7 @@ def init_session_state():
         "job_changed": False,
         "mode": None,
         "hide_filled_rows": False,
+        "recent_path": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -754,6 +835,27 @@ def main():
             st.caption(f"Dossier par defaut: {os.getcwd()}")
 
     else:
+        st.subheader("0) Reouvrir une session recente")
+        recent_sessions = load_recent_index()
+        if recent_sessions:
+            options = []
+            session_map = {}
+            for session in recent_sessions:
+                label = session.get("label") or "session"
+                stamp = session.get("saved_at") or ""
+                display = f"{stamp} - {label}"
+                options.append(display)
+                session_map[display] = session.get("path")
+            choice = st.selectbox(
+                "Sessions recentes (serveur)",
+                options,
+                key="recent_select",
+            )
+            if st.button("Charger la session selectionnee"):
+                st.session_state["recent_path"] = session_map.get(choice)
+        else:
+            st.caption("Aucune session recente disponible.")
+
         st.subheader("1) Reprendre un fichier existant")
         if st.button("Ouvrir un fichier local (dialogue Windows)"):
             path = try_tk_open_file()
@@ -769,7 +871,15 @@ def main():
             type=["xlsx"],
             key="uploader_continue",
         )
-        if input_path:
+        recent_path = st.session_state.get("recent_path")
+        if recent_path:
+            file_or_path = recent_path
+            source_id = f"recent::{os.path.abspath(recent_path)}"
+            save_path = recent_path
+            st.session_state["save_path"] = save_path
+            st.session_state["auto_save_path"] = build_extracteur_path(save_path)
+            st.session_state["recent_path"] = None
+        elif input_path:
             file_or_path = input_path
             source_id = f"path::{os.path.abspath(input_path)}"
             save_path = input_path
@@ -910,6 +1020,12 @@ def main():
                 st.session_state["sheet_name"],
                 st.session_state["original_columns"],
             )
+            save_recent_snapshot(
+                st.session_state["df_full"],
+                st.session_state["sheet_name"],
+                st.session_state["original_columns"],
+                os.path.basename(st.session_state.get("save_path") or "session"),
+            )
             st.success("Sauvegarde automatique effectuee.")
         else:
             st.warning("Chemin de sauvegarde auto manquant.")
@@ -923,6 +1039,12 @@ def main():
                 st.session_state["save_path"],
                 st.session_state["sheet_name"],
                 st.session_state["original_columns"],
+            )
+            save_recent_snapshot(
+                st.session_state["df_full"],
+                st.session_state["sheet_name"],
+                st.session_state["original_columns"],
+                os.path.basename(st.session_state.get("save_path") or "session"),
             )
             st.success("Sauvegarde terminee.")
         except Exception as exc:
