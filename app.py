@@ -30,11 +30,11 @@ DEFAULT_TIME = time(15, 0)
 AUTO_FILL_FIELDS = {"diametre", "materiel", "employe1", "sch", "type", "posoudurecorrige"}
 SOUD_GRID_FIELDS = [
     "Diametre",
-    "Employe_1",
-    "Materiel",
-    "PoSoudureCorrige",
-    "SCH",
     "Type",
+    "PoSoudureCorrige",
+    "Materiel",
+    "SCH",
+    "Employe_1",
 ]
 MODE_NEW = "Nouveau document"
 MODE_CONTINUE = "Continuer (reprendre un fichier non termine)"
@@ -133,7 +133,10 @@ def compute_posoudurecorrige(diam_text, type_text):
             return "24"
         return None
     if type_code == "TW":
-        return "1"
+        diam_val = parse_diameter_value(diam_str)
+        if diam_val is None:
+            return None
+        return format_number(diam_val * 0.5)
     return None
 
 
