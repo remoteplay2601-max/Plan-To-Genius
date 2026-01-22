@@ -553,6 +553,18 @@ def unique_in_order(values):
     return ordered
 
 
+def job_sort_key(value):
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return (2, "")
+    if isinstance(value, (int, float)):
+        return (0, float(value))
+    text = str(value).strip()
+    match = re.match(r"^\d+(\.\d+)?$", text)
+    if match:
+        return (0, float(text))
+    return (1, text.lower())
+
+
 def sorted_group(df_group):
     df_sorted = df_group.copy()
     df_sorted["_sort_key"] = df_sorted.apply(
@@ -1147,6 +1159,7 @@ def init_session_state():
         "meta_project_line": "",
         "meta_creator": "",
         "meta_date": "",
+        "force_job": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -1376,7 +1389,7 @@ def main():
         df_view = clean_df(df_full, drop_filled=st.session_state["hide_filled_rows"])
     st.session_state["df_view"] = df_view
 
-    jobs = unique_in_order(df_view["Job"].tolist())
+    jobs = sorted(unique_in_order(df_view["Job"].tolist()), key=job_sort_key)
     if not jobs:
         st.warning("Aucun Job disponible.")
         return
@@ -1391,6 +1404,11 @@ def main():
         or st.session_state["selected_job"] not in jobs
     ):
         st.session_state["selected_job"] = jobs[default_index]
+
+    force_job = st.session_state.get("force_job")
+    if force_job in jobs:
+        st.session_state["job_select"] = force_job
+        st.session_state["force_job"] = None
 
     def on_job_change():
         new_value = st.session_state["job_select"]
@@ -1414,6 +1432,7 @@ def main():
             col_stay, col_leave = st.columns(2)
             if col_stay.button("Rester sur ce Job"):
                 st.session_state["pending_job"] = None
+                st.session_state["force_job"] = current_job
                 st.rerun()
             if col_leave.button("Changer quand meme"):
                 st.session_state["selected_job"] = pending_job
@@ -1432,6 +1451,13 @@ def main():
             key="hide_filled_rows",
             help="Decoche pour eviter que les lignes disparaissent pendant la saisie.",
         )
+
+    def queue_job_change(target_job):
+        if not target_job or target_job == st.session_state["selected_job"]:
+            return
+        st.session_state["pending_job"] = target_job
+        st.session_state["force_job"] = target_job
+        st.rerun()
 
     updates = build_ui(df_view, selected_job)
     st.session_state["updates"] = updates
@@ -1520,6 +1546,15 @@ def main():
         file_name=genius_name,
         mime=genius_mime,
     )
+
+    current_index = jobs.index(selected_job)
+    prev_job = jobs[current_index - 1] if current_index > 0 else None
+    next_job = jobs[current_index + 1] if current_index < len(jobs) - 1 else None
+    nav_prev, nav_next = st.columns(2)
+    if nav_prev.button("Job precedent", disabled=prev_job is None):
+        queue_job_change(prev_job)
+    if nav_next.button("Job suivant", disabled=next_job is None):
+        queue_job_change(next_job)
 
 
 
