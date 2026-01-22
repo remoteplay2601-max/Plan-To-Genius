@@ -588,11 +588,20 @@ def build_ui(df_view, selected_job):
             return None, None
         return match.index[0], match.iloc[0]["CustomFieldValue"]
 
+    def get_state_value(idx):
+        if idx is None:
+            return None
+        key = f"grid_{idx}"
+        return st.session_state.get(key)
+
     def get_value_for(idx, fallback):
         if idx is None:
             return fallback
         if idx in updates:
             return updates[idx]
+        state_val = get_state_value(idx)
+        if has_value(state_val):
+            return state_val
         return fallback
 
     for op_code in op_codes:
@@ -795,6 +804,9 @@ def build_ui(df_view, selected_job):
                     if computed is None:
                         continue
                     updates[pos_idx] = computed
+                    grid_key = f"grid_{pos_idx}"
+                    if not has_value(st.session_state.get(grid_key)):
+                        st.session_state[grid_key] = computed
                     st.session_state[calc_key] = {
                         "diam": diam_text,
                         "type": type_text,
