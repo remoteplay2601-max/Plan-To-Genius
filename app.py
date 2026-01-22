@@ -78,6 +78,65 @@ def get_now_quebec():
         return datetime.now()
 
 
+def parse_diameter_value(value):
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    text = str(value).strip().replace(",", ".")
+    if not text:
+        return None
+    fraction_match = re.match(r"^\s*(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)\s*$", text)
+    if fraction_match:
+        num = float(fraction_match.group(1))
+        den = float(fraction_match.group(2))
+        if den == 0:
+            return None
+        return num / den
+    number_match = re.search(r"[-+]?\d*\.?\d+", text)
+    if number_match:
+        try:
+            return float(number_match.group(0))
+        except ValueError:
+            return None
+    return None
+
+
+def format_number(value):
+    if value is None:
+        return ""
+    if abs(value - int(round(value))) < 1e-9:
+        return str(int(round(value)))
+    text = f"{value:.6f}".rstrip("0").rstrip(".")
+    return text
+
+
+def compute_posoudurecorrige(diam_text, type_text):
+    if not diam_text or not type_text:
+        return None
+    type_code = str(type_text).strip().upper()
+    diam_str = str(diam_text).strip()
+    if type_code in {"BW", "SW", "THRD"}:
+        return diam_str
+    if type_code in {"SOB", "LET", "OLET"}:
+        diam_val = parse_diameter_value(diam_str)
+        if diam_val is None:
+            return None
+        return format_number(diam_val * 3)
+    if type_code == "FIL":
+        diam_val = parse_diameter_value(diam_str)
+        if diam_val is None:
+            return None
+        if 0 <= diam_val <= 10:
+            return "4"
+        if 11 <= diam_val <= 24:
+            return "12"
+        if 25 <= diam_val <= 48:
+            return "24"
+        return None
+    if type_code == "TW":
+        return "1"
+    return None
+
+
 def inject_styles():
     st.markdown(
         """
@@ -529,6 +588,13 @@ def build_ui(df_view, selected_job):
             return None, None
         return match.index[0], match.iloc[0]["CustomFieldValue"]
 
+    def get_value_for(idx, fallback):
+        if idx is None:
+            return fallback
+        if idx in updates:
+            return updates[idx]
+        return fallback
+
     for op_code in op_codes:
         st.markdown(
             f"<div class='op-header'>Operation {html.escape(str(op_code))}</div>",
@@ -695,6 +761,44 @@ def build_ui(df_view, selected_job):
                                 prev_key, ""
                             )
                 st.markdown("</div>", unsafe_allow_html=True)
+                for joint in joint_rows:
+                    diam_idx, diam_val = find_row_index(
+                        grid_df, field_map.get("diametre", ""), joint["raw"]
+                    )
+                    type_idx, type_val = find_row_index(
+                        grid_df, field_map.get("type", ""), joint["raw"]
+                    )
+                    pos_idx, pos_val = find_row_index(
+                        grid_df, field_map.get("posoudurecorrige", ""), joint["raw"]
+                    )
+                    if pos_idx is None:
+                        continue
+                    current_diam = get_value_for(diam_idx, diam_val)
+                    current_type = get_value_for(type_idx, type_val)
+                    current_pos = get_value_for(pos_idx, pos_val)
+                    if not has_value(current_diam) or not has_value(current_type):
+                        continue
+                    diam_text = str(current_diam).strip()
+                    type_text = str(current_type).strip().upper()
+                    calc_key = f"pos_calc_{pos_idx}"
+                    prev = st.session_state.get(calc_key)
+                    if prev is None:
+                        if has_value(current_pos):
+                            st.session_state[calc_key] = {
+                                "diam": diam_text,
+                                "type": type_text,
+                            }
+                            continue
+                    if prev and prev.get("diam") == diam_text and prev.get("type") == type_text:
+                        continue
+                    computed = compute_posoudurecorrige(diam_text, type_text)
+                    if computed is None:
+                        continue
+                    updates[pos_idx] = computed
+                    st.session_state[calc_key] = {
+                        "diam": diam_text,
+                        "type": type_text,
+                    }
         for field_name in field_names:
             if op_norm == "soud" and normalize_key(field_name) in grid_field_keys:
                 continue
