@@ -701,6 +701,36 @@ def build_ui(df_view, selected_job):
                     )
                 joint_rows.sort(key=lambda item: item["sort_key"])
 
+                pos_field_name = field_map.get("posoudurecorrige", "")
+                diam_field_name = field_map.get("diametre", "")
+                type_field_name = field_map.get("type", "")
+                joint_index_map = {}
+                for joint in joint_rows:
+                    raw_key = joint["raw"]
+                    diam_idx, diam_val = (
+                        find_row_index(grid_df, diam_field_name, raw_key)
+                        if diam_field_name
+                        else (None, None)
+                    )
+                    type_idx, type_val = (
+                        find_row_index(grid_df, type_field_name, raw_key)
+                        if type_field_name
+                        else (None, None)
+                    )
+                    pos_idx, pos_val = (
+                        find_row_index(grid_df, pos_field_name, raw_key)
+                        if pos_field_name
+                        else (None, None)
+                    )
+                    joint_index_map[raw_key] = {
+                        "diam_idx": diam_idx,
+                        "diam_val": diam_val,
+                        "type_idx": type_idx,
+                        "type_val": type_val,
+                        "pos_idx": pos_idx,
+                        "pos_val": pos_val,
+                    }
+
                 st.markdown("<div class='grid-tight'>", unsafe_allow_html=True)
                 grid_cols = st.columns([0.9] + [1] * len(grid_fields))
                 with grid_cols[0]:
@@ -739,9 +769,56 @@ def build_ui(df_view, selected_job):
                                 )
                                 continue
                             key = f"grid_{row_idx}"
+                            current_value = get_value_for(row_idx, current_value)
                             display_value = "" if not has_value(
                                 current_value
                             ) else str(current_value)
+                            if normalize_key(field_name) == "posoudurecorrige":
+                                idx_info = joint_index_map.get(joint["raw"], {})
+                                diam_idx = idx_info.get("diam_idx")
+                                type_idx = idx_info.get("type_idx")
+                                pos_idx = idx_info.get("pos_idx")
+                                current_diam = get_value_for(
+                                    diam_idx, idx_info.get("diam_val")
+                                )
+                                current_type = get_value_for(
+                                    type_idx, idx_info.get("type_val")
+                                )
+                                current_pos = get_value_for(
+                                    pos_idx, idx_info.get("pos_val")
+                                )
+                                if has_value(current_diam) and has_value(current_type):
+                                    diam_text = str(current_diam).strip()
+                                    type_text = str(current_type).strip().upper()
+                                    calc_key = f"pos_calc_{row_idx}"
+                                    prev = st.session_state.get(calc_key)
+                                    should_compute = False
+                                    if prev is None:
+                                        if not has_value(current_pos):
+                                            should_compute = True
+                                        else:
+                                            st.session_state[calc_key] = {
+                                                "diam": diam_text,
+                                                "type": type_text,
+                                            }
+                                    elif (
+                                        prev.get("diam") != diam_text
+                                        or prev.get("type") != type_text
+                                    ):
+                                        should_compute = True
+                                    if should_compute:
+                                        computed = compute_posoudurecorrige(
+                                            diam_text, type_text
+                                        )
+                                        if computed is not None:
+                                            display_value = str(computed)
+                                            current_value = display_value
+                                            st.session_state[key] = display_value
+                                            updates[row_idx] = display_value
+                                            st.session_state[calc_key] = {
+                                                "diam": diam_text,
+                                                "type": type_text,
+                                            }
                             if row_pos > 0 and seed_value and not has_value(
                                 current_value
                             ):
@@ -770,47 +847,6 @@ def build_ui(df_view, selected_job):
                                 prev_key, ""
                             )
                 st.markdown("</div>", unsafe_allow_html=True)
-                for joint in joint_rows:
-                    diam_idx, diam_val = find_row_index(
-                        grid_df, field_map.get("diametre", ""), joint["raw"]
-                    )
-                    type_idx, type_val = find_row_index(
-                        grid_df, field_map.get("type", ""), joint["raw"]
-                    )
-                    pos_idx, pos_val = find_row_index(
-                        grid_df, field_map.get("posoudurecorrige", ""), joint["raw"]
-                    )
-                    if pos_idx is None:
-                        continue
-                    current_diam = get_value_for(diam_idx, diam_val)
-                    current_type = get_value_for(type_idx, type_val)
-                    current_pos = get_value_for(pos_idx, pos_val)
-                    if not has_value(current_diam) or not has_value(current_type):
-                        continue
-                    diam_text = str(current_diam).strip()
-                    type_text = str(current_type).strip().upper()
-                    calc_key = f"pos_calc_{pos_idx}"
-                    prev = st.session_state.get(calc_key)
-                    if prev is None:
-                        if has_value(current_pos):
-                            st.session_state[calc_key] = {
-                                "diam": diam_text,
-                                "type": type_text,
-                            }
-                            continue
-                    if prev and prev.get("diam") == diam_text and prev.get("type") == type_text:
-                        continue
-                    computed = compute_posoudurecorrige(diam_text, type_text)
-                    if computed is None:
-                        continue
-                    updates[pos_idx] = computed
-                    grid_key = f"grid_{pos_idx}"
-                    if not has_value(st.session_state.get(grid_key)):
-                        st.session_state[grid_key] = computed
-                    st.session_state[calc_key] = {
-                        "diam": diam_text,
-                        "type": type_text,
-                    }
         for field_name in field_names:
             if op_norm == "soud" and normalize_key(field_name) in grid_field_keys:
                 continue
