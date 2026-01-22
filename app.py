@@ -232,9 +232,9 @@ def inject_styles():
             color: var(--text);
         }
         .stTextInput input:disabled {
-            background: rgba(79, 209, 197, 0.12);
+            background: rgba(12, 16, 24, 0.9);
             color: #d7fef7;
-            border: 1px solid rgba(79, 209, 197, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             font-family: 'Space Mono', monospace;
             text-align: center;
         }
