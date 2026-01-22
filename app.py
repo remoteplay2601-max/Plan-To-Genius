@@ -231,6 +231,13 @@ def inject_styles():
             height: 2.05rem;
             color: var(--text);
         }
+        .stTextInput input:disabled {
+            background: rgba(79, 209, 197, 0.12);
+            color: #d7fef7;
+            border: 1px solid rgba(79, 209, 197, 0.35);
+            font-family: 'Space Mono', monospace;
+            text-align: center;
+        }
         div[data-testid="stTextInput"] {
             margin-bottom: 0.2rem;
         }
@@ -620,16 +627,19 @@ def build_ui(df_view, selected_job):
                 joint_rows.sort(key=lambda item: item["sort_key"])
 
                 st.markdown("<div class='grid-tight'>", unsafe_allow_html=True)
-                grid_cols = st.columns([0.7] + [1] * len(grid_fields))
+                grid_cols = st.columns([0.9] + [1] * len(grid_fields))
                 with grid_cols[0]:
                     st.markdown(
-                        "<div class='mini-label'>&nbsp;</div>",
+                        "<div class='mini-label'>Joint</div>",
                         unsafe_allow_html=True,
                     )
-                    for joint in joint_rows:
-                        st.markdown(
-                            f"<span class='joint-tag'>{html.escape(joint['label'])}</span>",
-                            unsafe_allow_html=True,
+                    for row_pos, joint in enumerate(joint_rows):
+                        st.text_input(
+                            f"joint_{selected_job}_{op_code}_{row_pos}",
+                            value=str(joint["label"]),
+                            key=f"joint_{selected_job}_{op_code}_{row_pos}",
+                            disabled=True,
+                            label_visibility="collapsed",
                         )
 
                 for col_idx, field_name in enumerate(grid_fields):
