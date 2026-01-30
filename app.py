@@ -783,6 +783,7 @@ def build_ui(df_view, selected_job):
                                     placeholder="N/A",
                                 )
                                 continue
+                            raw_value = current_value
                             key = f"grid_{row_idx}"
                             current_value = get_value_for(row_idx, current_value)
                             display_value = "" if not has_value(
@@ -850,6 +851,12 @@ def build_ui(df_view, selected_job):
                             )
                             if new_value != display_value:
                                 updates[row_idx] = new_value
+                            else:
+                                raw_display = "" if not has_value(
+                                    raw_value
+                                ) else str(raw_value)
+                                if raw_display != new_value:
+                                    updates[row_idx] = new_value
                             if row_pos == 0:
                                 prev_key = f"prev_{key}"
                                 prev_value = st.session_state.get(
