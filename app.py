@@ -36,6 +36,7 @@ SOUD_GRID_FIELDS = [
     "SCH",
     "Employe_1",
 ]
+QUICK_ONLY_FIELDS = {"diametre", "type", "posoudurecorrige", "materiel", "sch"}
 MODE_NEW = "Nouveau document"
 MODE_CONTINUE = "Continuer (reprendre un fichier non termine)"
 RECENT_DIR_NAME = ".recent_sessions"
@@ -619,6 +620,7 @@ def build_ui(df_view, selected_job):
             return state_val
         return fallback
 
+    quick_only = st.session_state.get("quick_only_soud", False)
     for op_code in op_codes:
         st.markdown(
             f"<div class='op-header'>Operation {html.escape(str(op_code))}</div>",
@@ -631,7 +633,7 @@ def build_ui(df_view, selected_job):
         )
         df_date = df_op[date_mask]
         formatted_date = None
-        if not df_date.empty:
+        if not quick_only and not df_date.empty:
             existing_value = (
                 df_date["CustomFieldValue"]
                 .dropna()
@@ -680,6 +682,12 @@ def build_ui(df_view, selected_job):
                 for key in (normalize_key(name) for name in SOUD_GRID_FIELDS)
                 if key in field_map
             ]
+            if quick_only:
+                grid_fields = [
+                    name
+                    for name in grid_fields
+                    if normalize_key(name) in QUICK_ONLY_FIELDS
+                ]
             grid_field_keys = {normalize_key(name) for name in grid_fields}
             grid_df = other_fields[
                 other_fields["CustomFieldName"].apply(
@@ -869,6 +877,8 @@ def build_ui(df_view, selected_job):
                                 prev_key, ""
                             )
                 st.markdown("</div>", unsafe_allow_html=True)
+        if quick_only:
+            continue
         for field_name in field_names:
             if op_norm == "soud" and normalize_key(field_name) in grid_field_keys:
                 continue
@@ -1159,6 +1169,7 @@ def init_session_state():
         "job_changed": False,
         "mode": None,
         "hide_filled_rows": True,
+        "quick_only_soud": False,
         "recent_path": None,
         "recent_session": None,
         "file_meta": {},
@@ -1428,11 +1439,18 @@ def main():
         key="job_select",
         on_change=on_job_change,
     )
+    st.checkbox(
+        "Mode rapide: seulement Diametre / Type / PoSoudureCorrige / Materiel / SCH",
+        key="quick_only_soud",
+        help="Ignore les autres champs et ne bloque pas le changement de Job.",
+    )
 
     current_job = st.session_state["selected_job"]
     pending_job = st.session_state.get("pending_job")
     if pending_job and pending_job != current_job:
-        if job_has_missing(df_full, current_job):
+        if not st.session_state.get("quick_only_soud") and job_has_missing(
+            df_full, current_job
+        ):
             st.warning(
                 "Des champs ne sont pas remplis pour ce Job. Voulez-vous vraiment changer?"
             )
