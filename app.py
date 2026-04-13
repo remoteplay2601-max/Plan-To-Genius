@@ -37,17 +37,45 @@ SOUD_GRID_FIELDS = [
     "Employe_1",
 ]
 QUICK_ONLY_FIELDS = {"diametre", "type", "posoudurecorrige", "materiel", "sch"}
+HIDDEN_OPERATION_CODES = {"dec"}
 MODE_NEW = "Nouveau document"
 MODE_CONTINUE = "Continuer (reprendre un fichier non termine)"
 RECENT_DIR_NAME = ".recent_sessions"
 RECENT_INDEX_NAME = "index.json"
 RECENT_LIMIT = 30
+WIDGET_STATE_PREFIXES = (
+    "grid_",
+    "val_",
+    "joint_",
+    "dt_date_",
+    "dt_time_",
+    "prev_",
+    "pos_calc_",
+)
+WIDGET_STATE_KEYS = {"job_select"}
 
 
 def has_value(val):
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return False
     return str(val).strip() != ""
+
+
+def as_widget_value(value):
+    return "" if not has_value(value) else str(value)
+
+
+def sync_text_input_state(key, value, overwrite=False):
+    widget_value = as_widget_value(value)
+    if overwrite or key not in st.session_state:
+        st.session_state[key] = widget_value
+    return st.session_state.get(key, widget_value)
+
+
+def clear_dynamic_widget_state():
+    for key in list(st.session_state.keys()):
+        if key in WIDGET_STATE_KEYS or key.startswith(WIDGET_STATE_PREFIXES):
+            del st.session_state[key]
 
 
 def load_excel(file_or_path):
@@ -296,12 +324,19 @@ def inject_styles():
             height: 2.05rem;
             color: var(--text);
         }
-        .stTextInput input:disabled {
-            background: rgba(12, 16, 24, 0.9);
-            color: #d7fef7;
-            border: 1px solid rgba(255, 255, 255, 0.08);
+        .stTextInput input:disabled,
+        .stDateInput input:disabled {
+            background: rgba(148, 163, 184, 0.16);
+            color: rgba(226, 232, 240, 0.78);
+            border: 1px solid rgba(148, 163, 184, 0.32);
             font-family: 'Space Mono', monospace;
             text-align: center;
+        }
+        .stTimeInput div[data-baseweb="select"] > div[aria-disabled="true"],
+        .stSelectbox div[data-baseweb="select"] > div[aria-disabled="true"] {
+            background: rgba(148, 163, 184, 0.16);
+            border: 1px solid rgba(148, 163, 184, 0.32);
+            color: rgba(226, 232, 240, 0.78);
         }
         div[data-testid="stTextInput"] {
             margin-bottom: 0.2rem;
@@ -391,11 +426,12 @@ def clean_df(df, drop_filled=True):
     op_norm = df_clean["OperationCode"].apply(normalize_text)
     field_norm = df_clean["CustomFieldName"].apply(normalize_text)
     mask_ass = (op_norm == "ass") & (field_norm.isin(target_fields))
+    mask_hidden_ops = op_norm.isin(HIDDEN_OPERATION_CODES)
 
     if drop_filled:
-        df_clean = df_clean[~(mask_filled | mask_ass)].copy()
+        df_clean = df_clean[~(mask_filled | mask_ass | mask_hidden_ops)].copy()
     else:
-        df_clean = df_clean[~mask_ass].copy()
+        df_clean = df_clean[~(mask_ass | mask_hidden_ops)].copy()
     return df_clean
 
 
@@ -466,6 +502,42 @@ def parse_genius_datetime(value):
     return date(year, month, day), time(hour, minute)
 
 
+def get_prefilled_row_indexes(df):
+    if df is None or "CustomFieldValue" not in df.columns:
+        return set()
+    return set(df.index[df["CustomFieldValue"].apply(has_value)].tolist())
+
+
+def get_filled_value_mask(df):
+    if df is None or "CustomFieldValue" not in df.columns:
+        return pd.Series(False, index=getattr(df, "index", pd.Index([])), dtype=bool)
+    return df["CustomFieldValue"].apply(has_value).astype(bool)
+
+
+def normalize_compare_value(value):
+    if not has_value(value):
+        return ""
+    return str(value).strip()
+
+
+def get_modified_jobs(df_full, original_df_full):
+    if (
+        df_full is None
+        or original_df_full is None
+        or "CustomFieldValue" not in df_full.columns
+        or "CustomFieldValue" not in original_df_full.columns
+    ):
+        return set()
+    original_values = original_df_full.reindex(df_full.index)["CustomFieldValue"]
+    current_norm = df_full["CustomFieldValue"].apply(normalize_compare_value)
+    original_norm = original_values.apply(normalize_compare_value)
+    modified_mask = current_norm != original_norm
+    if not modified_mask.any():
+        return set()
+    modified_jobs = df_full.loc[modified_mask, "Job"]
+    return {job for job in modified_jobs.tolist() if has_value(job)}
+
+
 def apply_updates(df_full, updates):
     if not updates:
         return df_full
@@ -504,7 +576,7 @@ def export_bytes(df_clean, sheet_name, original_columns):
 
 
 def export_genius_bytes(df_clean, sheet_name, original_columns):
-    genius_df = df_clean[df_clean["CustomFieldValue"].apply(has_value)].copy()
+    genius_df = df_clean.loc[get_filled_value_mask(df_clean)].copy()
     genius_df = genius_df.drop(columns=["_orig_index"], errors="ignore")
     if original_columns:
         genius_df = genius_df[original_columns]
@@ -520,8 +592,16 @@ def export_genius_package(
     original_columns,
     base_name,
     total_rows_per_file=500,
-):
-    genius_df = df_full[df_full["CustomFieldValue"].apply(has_value)].copy()
+    modified_jobs=None,
+    ):
+    if modified_jobs is not None:
+        if modified_jobs:
+            genius_df = df_full[df_full["Job"].isin(modified_jobs)].copy()
+        else:
+            genius_df = df_full.iloc[0:0].copy()
+    else:
+        genius_df = df_full.copy()
+    genius_df = genius_df.loc[get_filled_value_mask(genius_df)].copy()
     genius_df = genius_df.drop(columns=["_orig_index"], errors="ignore")
     if original_columns:
         genius_df = genius_df[original_columns]
@@ -582,7 +662,13 @@ def sorted_group(df_group):
     return df_sorted.drop(columns=["_sort_key"])
 
 
-def build_ui(df_view, selected_job):
+def build_ui(df_view, selected_job, locked_prefilled_rows=None, editing_job=None):
+    locked_prefilled_rows = locked_prefilled_rows or set()
+    is_editing_job = editing_job == selected_job
+
+    def is_locked(idx):
+        return idx is not None and idx in locked_prefilled_rows and not is_editing_job
+
     updates = {}
     df_job = df_view[df_view["Job"] == selected_job].copy()
     if df_job.empty:
@@ -637,6 +723,7 @@ def build_ui(df_view, selected_job):
         )
         df_date = df_op[date_mask]
         formatted_date = None
+        date_locked = False
         if not quick_only and not df_date.empty:
             existing_value = (
                 df_date["CustomFieldValue"]
@@ -652,6 +739,7 @@ def build_ui(df_view, selected_job):
                 parsed = parse_genius_datetime(existing_value.iloc[0])
                 if parsed:
                     default_date, default_time = parsed
+            date_locked = any(is_locked(idx) for idx in df_date.index)
             date_key = f"dt_date_{selected_job}_{op_code}"
             time_key = f"dt_time_{selected_job}_{op_code}"
             date_col, time_col = st.columns([2, 1])
@@ -661,6 +749,7 @@ def build_ui(df_view, selected_job):
                 value=default_date,
                 key=date_key,
                 label_visibility="collapsed",
+                disabled=date_locked,
             )
             time_col.markdown("<div class='mini-label'>Heure</div>", unsafe_allow_html=True)
             time_value = time_col.time_input(
@@ -668,6 +757,7 @@ def build_ui(df_view, selected_job):
                 value=default_time,
                 key=time_key,
                 label_visibility="collapsed",
+                disabled=date_locked,
             )
             formatted_date = format_datetime(date_value, time_value)
 
@@ -798,10 +888,13 @@ def build_ui(df_view, selected_job):
                             raw_value = current_value
                             key = f"grid_{row_idx}"
                             current_value = get_value_for(row_idx, current_value)
-                            display_value = "" if not has_value(
-                                current_value
-                            ) else str(current_value)
-                            if normalize_key(field_name) == "posoudurecorrige":
+                            display_value = as_widget_value(current_value)
+                            field_locked = is_locked(row_idx)
+                            overwrite_widget_value = False
+                            if (
+                                normalize_key(field_name) == "posoudurecorrige"
+                                and not field_locked
+                            ):
                                 idx_info = joint_index_map.get(joint["raw"], {})
                                 diam_idx = idx_info.get("diam_idx")
                                 type_idx = idx_info.get("type_idx")
@@ -841,25 +934,37 @@ def build_ui(df_view, selected_job):
                                         if computed is not None:
                                             display_value = str(computed)
                                             current_value = display_value
-                                            st.session_state[key] = display_value
                                             updates[row_idx] = display_value
+                                            overwrite_widget_value = True
                                             st.session_state[calc_key] = {
                                                 "diam": diam_text,
                                                 "type": type_text,
                                             }
-                            if row_pos > 0 and seed_value and not has_value(
+                            if (
+                                row_pos > 0
+                                and seed_value
+                                and not field_locked
+                                and not has_value(
                                 current_value
+                                )
                             ):
                                 existing_state = st.session_state.get(key, "")
                                 if not has_value(existing_state):
-                                    st.session_state[key] = seed_value
+                                    display_value = seed_value
+                                    current_value = seed_value
                                     updates[row_idx] = seed_value
+                                    overwrite_widget_value = True
+                            sync_text_input_state(
+                                key,
+                                display_value,
+                                overwrite=overwrite_widget_value,
+                            )
                             new_value = st.text_input(
                                 f"{field_name} {row_idx}",
-                                value=display_value,
                                 key=key,
                                 label_visibility="collapsed",
                                 placeholder="A remplir",
+                                disabled=field_locked,
                             )
                             if new_value != display_value:
                                 updates[row_idx] = new_value
@@ -874,7 +979,11 @@ def build_ui(df_view, selected_job):
                                 prev_value = st.session_state.get(
                                     prev_key, display_value
                                 )
-                                if new_value.strip() and new_value.strip() != prev_value:
+                                if (
+                                    not field_locked
+                                    and new_value.strip()
+                                    and new_value.strip() != prev_value
+                                ):
                                     seed_value = new_value.strip()
                         if prev_key:
                             st.session_state[prev_key] = seed_value or st.session_state.get(
@@ -907,6 +1016,8 @@ def build_ui(df_view, selected_job):
                 first_current_raw
             )
             first_key = f"val_{first_idx}"
+            first_locked = is_locked(first_idx)
+            sync_text_input_state(first_key, first_display)
             col_left, col_right = st.columns([0.9, 5.1])
             col_left.markdown(
                 f"<span class='joint-tag'>{html.escape(str(first_joint))}</span>",
@@ -914,15 +1025,16 @@ def build_ui(df_view, selected_job):
             )
             first_new = col_right.text_input(
                 f"{field_name} {first_idx}",
-                value=first_display,
                 key=first_key,
                 label_visibility="collapsed",
                 placeholder="Saisir une valeur",
+                disabled=first_locked,
             )
             if first_new != first_display:
                 updates[first_idx] = first_new
             seed_value = None
-            if auto_fill:
+            prev_key = None
+            if auto_fill and not first_locked:
                 first_new_stripped = first_new.strip()
                 prev_key = f"prev_{first_key}"
                 prev_value = st.session_state.get(prev_key, first_display)
@@ -940,11 +1052,24 @@ def build_ui(df_view, selected_job):
                     current_value
                 )
                 key = f"val_{idx}"
-                if auto_fill and seed_value and not has_value(current_value):
+                row_locked = is_locked(idx)
+                overwrite_widget_value = False
+                if (
+                    auto_fill
+                    and seed_value
+                    and not row_locked
+                    and not has_value(current_value)
+                ):
                     existing_state = st.session_state.get(key, "")
                     if not has_value(existing_state):
-                        st.session_state[key] = seed_value
+                        display_value = seed_value
                         updates[idx] = seed_value
+                        overwrite_widget_value = True
+                sync_text_input_state(
+                    key,
+                    display_value,
+                    overwrite=overwrite_widget_value,
+                )
                 col_left, col_right = st.columns([0.9, 5.1])
                 col_left.markdown(
                     f"<span class='joint-tag'>{html.escape(str(joint_label))}</span>",
@@ -952,14 +1077,14 @@ def build_ui(df_view, selected_job):
                 )
                 new_value = col_right.text_input(
                     f"{field_name} {idx}",
-                    value=display_value,
                     key=key,
                     label_visibility="collapsed",
                     placeholder="Saisir une valeur",
+                    disabled=row_locked,
                 )
                 if new_value != display_value:
                     updates[idx] = new_value
-            if auto_fill:
+            if auto_fill and prev_key:
                 st.session_state[prev_key] = first_new
         has_data = False
         has_employe = False
@@ -975,7 +1100,7 @@ def build_ui(df_view, selected_job):
                         break
         require_employe = normalize_text(op_code) == "soud"
         allow_date = has_data and (has_employe if require_employe else True)
-        if formatted_date and allow_date:
+        if formatted_date and allow_date and not date_locked:
             for idx in df_date.index:
                 if df_view.at[idx, "CustomFieldValue"] != formatted_date:
                     updates[idx] = formatted_date
@@ -1168,6 +1293,7 @@ def init_session_state():
         "selected_job": None,
         "pending_job": None,
         "updates": {},
+        "original_df_full": None,
         "original_columns": None,
         "loaded_source_id": None,
         "job_changed": False,
@@ -1182,6 +1308,8 @@ def init_session_state():
         "meta_creator": "",
         "meta_date": "",
         "force_job": None,
+        "editing_job": None,
+        "locked_prefilled_rows": set(),
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -1207,15 +1335,19 @@ def main():
         [MODE_NEW, MODE_CONTINUE],
     )
     if st.session_state["mode"] != mode:
+        clear_dynamic_widget_state()
         st.session_state["mode"] = mode
         st.session_state["df_full"] = None
         st.session_state["df_view"] = None
         st.session_state["loaded_source_id"] = None
         st.session_state["selected_job"] = None
         st.session_state["updates"] = {}
+        st.session_state["original_df_full"] = None
         st.session_state["save_path"] = None
         st.session_state["auto_save_path"] = None
         st.session_state["hide_filled_rows"] = mode == MODE_NEW
+        st.session_state["editing_job"] = None
+        st.session_state["locked_prefilled_rows"] = set()
 
     file_or_path = None
     source_id = None
@@ -1376,17 +1508,20 @@ def main():
             if missing:
                 st.error(f"Colonnes manquantes: {', '.join(missing)}")
                 return
-            if mode == MODE_NEW:
-                df_full = clean_df(df_raw, drop_filled=True)
-            else:
-                df_full = df_raw.copy()
-                df_full["_orig_index"] = df_full.index
+            df_full = df_raw.copy()
+            df_full["_orig_index"] = df_full.index
+            clear_dynamic_widget_state()
             st.session_state["df_full"] = df_full
+            st.session_state["original_df_full"] = df_full.copy()
             st.session_state["sheet_name"] = sheet_name
             st.session_state["original_columns"] = list(df_raw.columns)
             st.session_state["loaded_source_id"] = source_id
             st.session_state["selected_job"] = None
             st.session_state["updates"] = {}
+            st.session_state["editing_job"] = None
+            st.session_state["locked_prefilled_rows"] = get_prefilled_row_indexes(
+                df_full
+            )
             st.session_state["auto_save_path"] = build_extracteur_path(
                 st.session_state["save_path"]
             )
@@ -1405,10 +1540,7 @@ def main():
     if df_full is None:
         return
 
-    if mode == MODE_CONTINUE:
-        df_view = df_full
-    else:
-        df_view = clean_df(df_full, drop_filled=st.session_state["hide_filled_rows"])
+    df_view = clean_df(df_full, drop_filled=False)
     st.session_state["df_view"] = df_view
 
     jobs = sorted(unique_in_order(df_view["Job"].tolist()), key=job_sort_key)
@@ -1444,7 +1576,7 @@ def main():
         on_change=on_job_change,
     )
     st.checkbox(
-        "Mode rapide: seulement Diametre / Type / PoSoudureCorrige / Materiel / SCH",
+        "Mode Matériel seulement:  Diametre / Type / PoSoudureCorrige / Materiel / SCH",
         key="quick_only_soud",
         help="Ignore les autres champs et ne bloque pas le changement de Job.",
     )
@@ -1467,18 +1599,20 @@ def main():
                 st.session_state["selected_job"] = pending_job
                 st.session_state["pending_job"] = None
                 st.session_state["job_changed"] = True
+                st.session_state["editing_job"] = None
                 st.rerun()
         else:
             st.session_state["selected_job"] = pending_job
             st.session_state["pending_job"] = None
             st.session_state["job_changed"] = True
+            st.session_state["editing_job"] = None
 
     selected_job = st.session_state["selected_job"]
     if mode != MODE_CONTINUE:
         st.checkbox(
             "Masquer les lignes deja remplies",
             key="hide_filled_rows",
-            help="Decoche pour eviter que les lignes disparaissent pendant la saisie.",
+            help="La job selectionnee affiche toujours les donnees deja remplies pour consultation ou modification.",
         )
 
     def queue_job_change(target_job):
@@ -1488,24 +1622,45 @@ def main():
         st.session_state["force_job"] = target_job
         st.rerun()
 
-    updates = build_ui(df_view, selected_job)
+    job_rows = df_view[df_view["Job"] == selected_job]
+    has_locked_rows = any(
+        idx in st.session_state.get("locked_prefilled_rows", set())
+        for idx in job_rows.index
+    )
+    is_editing_job = st.session_state.get("editing_job") == selected_job
+    button_label = "Terminer la modification" if is_editing_job else "Modifier"
+    if st.button(
+        button_label,
+        key=f"edit_job_{selected_job}",
+        disabled=not has_locked_rows and not is_editing_job,
+    ):
+        st.session_state["editing_job"] = None if is_editing_job else selected_job
+        st.rerun()
+    if has_locked_rows:
+        if is_editing_job:
+            st.caption("Modification active: les champs deja remplis de ce Job sont deverrouilles.")
+        else:
+            st.caption("Les champs deja remplis sont affiches en gris et bloques jusqu'au bouton Modifier.")
+
+    updates = build_ui(
+        df_view,
+        selected_job,
+        locked_prefilled_rows=st.session_state.get("locked_prefilled_rows", set()),
+        editing_job=st.session_state.get("editing_job"),
+    )
     st.session_state["updates"] = updates
     df_updated = apply_updates(df_full, updates)
     st.session_state["df_full"] = df_updated
-    if mode == MODE_CONTINUE:
-        st.session_state["df_view"] = df_updated
-    else:
-        st.session_state["df_view"] = clean_df(
-            df_updated, drop_filled=st.session_state["hide_filled_rows"]
-        )
+    st.session_state["df_view"] = clean_df(df_updated, drop_filled=False)
+    modified_jobs = get_modified_jobs(
+        st.session_state["df_full"],
+        st.session_state.get("original_df_full"),
+    )
 
     if st.session_state.get("job_changed"):
         auto_path = st.session_state.get("auto_save_path")
         if auto_path:
-            if mode == MODE_NEW:
-                df_to_save = clean_df(st.session_state["df_full"], drop_filled=True)
-            else:
-                df_to_save = st.session_state["df_full"]
+            df_to_save = st.session_state["df_full"]
             save_to_disk(
                 df_to_save,
                 auto_path,
@@ -1568,13 +1723,21 @@ def main():
         st.session_state["original_columns"],
         export_name,
         total_rows_per_file=500,
+        modified_jobs=modified_jobs,
     )
     col_genius.download_button(
-        "Exporter Genius",
+        "Exporter Genius (jobs modifies)",
         data=genius_data,
         file_name=genius_name,
         mime=genius_mime,
+        disabled=not modified_jobs,
     )
+    if modified_jobs:
+        col_genius.caption(
+            f"{len(modified_jobs)} job(s) modifie(s) dans cette session seront exportes."
+        )
+    else:
+        col_genius.caption("Aucun job modifie dans cette session.")
 
     current_index = jobs.index(selected_job)
     prev_job = jobs[current_index - 1] if current_index > 0 else None
