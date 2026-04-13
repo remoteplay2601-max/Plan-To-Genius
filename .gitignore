@@ -1,2 +1,11 @@
 Qualifab_BomVersionGammeImportTemplate 2026-01-09 (1).xlsx
 Qualifab_BomVersionGammeImportTemplate 2026-01-20.xlsx
+
+# Local Python environment
+.venv/
+__pycache__/
+*.py[cod]
+
+# Local app/session artifacts
+.recent_sessions/
+Qualifab_BomVersionGammeImportTemplate*_EXTRACTEUR.xlsx

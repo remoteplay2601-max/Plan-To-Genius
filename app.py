@@ -54,6 +54,8 @@ def load_excel(file_or_path):
     xls = pd.ExcelFile(file_or_path, engine="openpyxl")
     sheet_name = xls.sheet_names[0]
     df = pd.read_excel(xls, sheet_name=sheet_name, engine="openpyxl")
+    if "CustomFieldValue" in df.columns:
+        df["CustomFieldValue"] = df["CustomFieldValue"].astype("object")
     return df, sheet_name
 
 
@@ -115,7 +117,7 @@ def compute_posoudurecorrige(diam_text, type_text):
         return None
     type_code = str(type_text).strip().upper()
     diam_str = str(diam_text).strip()
-    if type_code in {"BW", "SW", "THRD"}:
+    if type_code in {"BW", "SW", "THRD", "SO"}:
         return diam_str
     if type_code in {"SOB", "LET", "OLET"}:
         diam_val = parse_diameter_value(diam_str)
@@ -468,6 +470,8 @@ def apply_updates(df_full, updates):
     if not updates:
         return df_full
     df_updated = df_full.copy()
+    if "CustomFieldValue" in df_updated.columns:
+        df_updated["CustomFieldValue"] = df_updated["CustomFieldValue"].astype("object")
     for idx, value in updates.items():
         if value is None:
             df_updated.at[idx, "CustomFieldValue"] = ""
